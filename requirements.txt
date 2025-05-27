@@ -1,0 +1,7 @@
+streamlit
+asyncio
+langchain-google-genai
+browser-use
+requests
+pandas
+playwright

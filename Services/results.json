@@ -1,0 +1,29 @@
+{
+  "total_documents": 1,
+  "document_types": [
+    "aadhaar_card"
+  ],
+  "results": {
+    "aadhaar_card": [
+      {
+        "extracted_data": {
+          "data_Aadhaar_Number": "None",
+          "data_Name": "Tapan Sarma",
+          "data_Gender": "MALE",
+          "data_Date_of_Birth": "2002-09-11",
+          "data_Address": "C/O: Kabindra Nath Sarma, Near\nNalbari Polytechnic College,\nChandkuchi, Nalbari,\nAssam - 781334",
+          "data_Fathers_Name": "None",
+          "data_Photo": "None",
+          "confidence": "0.9",
+          "additional_info": "VID : 9186083758430970\nMobile No: 9954018168\nIssue Date: 2021-07-05\n8141 5978 8449 (Possibly a part of Aadhaar number, but incomplete and not 12 digits.  Could be an Enrollment ID or similar.)\n1947 nelp@uidai.govin No1947 (UIDAI helpline information)"
+        },
+        "status": "partial_success",
+        "confidence": 0.6,
+        "document_type": "aadhaar_card",
+        "source_file": "D:\\imageextractor\\identites\\aadhar_card.jpg",
+        "validation_level": "failed",
+        "warning": "Document validation failed but data was extracted"
+      }
+    ]
+  }
+}
