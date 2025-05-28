@@ -1,0 +1,113 @@
+{
+  "document_types": {
+    "identity_documents": {
+      "aadhaar_card": {
+        "patterns": [
+          "(?i)aadhaar|aadhar|uidai|unique\\s*id",
+          "(?i)\u0906\u0927\u093e\u0930|\u092f\u0942\u0906\u0908\u0921\u0940\u090f\u0906\u0908"
+        ],
+        "fields": [
+          "aadhaar_number",
+          "name",
+          "date_of_birth",
+          "gender",
+          "address"
+        ]
+      },
+      "pan_card": {
+        "patterns": [
+          "(?i)pan|permanent\\s*account|income\\s*tax",
+          "(?i)tax\\s*id|tax\\s*number"
+        ],
+        "fields": [
+          "pan_number",
+          "name",
+          "father_name",
+          "date_of_birth"
+        ]
+      },
+      "license": {
+        "patterns": [
+          "(?i)license|dl|driving|permit|rto|dmv",
+          "(?i)vehicle|motor|transport"
+        ],
+        "fields": [
+          "license_number",
+          "name",
+          "date_of_birth",
+          "address",
+          "valid_from",
+          "valid_until"
+        ]
+      }
+    },
+    "business_documents": {
+      "incorporation_certificate": {
+        "patterns": [
+          "(?i)incorporation|certificate\\s*of\\s*formation",
+          "(?i)articles\\s*of\\s*incorporation"
+        ],
+        "fields": [
+          "company_name",
+          "incorporation_date",
+          "registration_number",
+          "state",
+          "registered_agent"
+        ]
+      },
+      "business_license": {
+        "patterns": [
+          "(?i)business\\s*license|permit",
+          "(?i)commercial\\s*license"
+        ],
+        "fields": [
+          "business_name",
+          "license_number",
+          "issue_date",
+          "expiry_date",
+          "business_type"
+        ]
+      }
+    },
+    "financial_documents": {
+      "bank_statement": {
+        "patterns": [
+          "(?i)bank\\s*statement|account\\s*statement",
+          "(?i)transaction\\s*history"
+        ],
+        "fields": [
+          "account_number",
+          "account_holder",
+          "statement_period",
+          "transactions"
+        ]
+      },
+      "tax_return": {
+        "patterns": [
+          "(?i)tax\\s*return|income\\s*tax\\s*return",
+          "(?i)form\\s*1040|form\\s*16"
+        ],
+        "fields": [
+          "tax_year",
+          "taxpayer_name",
+          "tax_id",
+          "total_income",
+          "tax_liability"
+        ]
+      }
+    }
+  },
+  "field_patterns": {
+    "dates": [
+      "\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}",
+      "\\d{4}[-/]\\d{1,2}[-/]\\d{1,2}"
+    ],
+    "numbers": [
+      "\\b\\d{10,12}\\b",
+      "\\b[A-Z]{2}\\d{7}\\b"
+    ],
+    "names": [
+      "\\b[A-Z][a-z]+(?:\\s+[A-Z][a-z]+)*\\b"
+    ]
+  }
+}

@@ -1,28 +1,40 @@
 {
   "total_documents": 1,
   "document_types": [
-    "aadhaar_card"
+    "newmexicocorp"
   ],
   "results": {
-    "aadhaar_card": [
+    "newmexicocorp": [
       {
-        "extracted_data": {
-          "data_Aadhaar_Number": "None",
-          "data_Name": "Tapan Sarma",
-          "data_Gender": "MALE",
-          "data_Date_of_Birth": "2002-09-11",
-          "data_Address": "C/O: Kabindra Nath Sarma, Near\nNalbari Polytechnic College,\nChandkuchi, Nalbari,\nAssam - 781334",
-          "data_Fathers_Name": "None",
-          "data_Photo": "None",
-          "confidence": "0.9",
-          "additional_info": "VID : 9186083758430970\nMobile No: 9954018168\nIssue Date: 2021-07-05\n8141 5978 8449 (Possibly a part of Aadhaar number, but incomplete and not 12 digits.  Could be an Enrollment ID or similar.)\n1947 nelp@uidai.govin No1947 (UIDAI helpline information)"
-        },
-        "status": "partial_success",
-        "confidence": 0.6,
-        "document_type": "aadhaar_card",
-        "source_file": "D:\\imageextractor\\identites\\aadhar_card.jpg",
-        "validation_level": "failed",
-        "warning": "Document validation failed but data was extracted"
+        "status": "rejected",
+        "document_type": "newmexicocorp",
+        "source_file": "D:\\imageextractor\\identites\\NewMexicoCorp.docx",
+        "rejection_reason": "Lack of crucial security features and missing critical information.  The document is a checklist, not a completed or signed document, making it impossible to verify authenticity.",
+        "verification_result": {
+          "is_genuine": false,
+          "confidence_score": 0.2,
+          "rejection_reason": "Lack of crucial security features and missing critical information.  The document is a checklist, not a completed or signed document, making it impossible to verify authenticity.",
+          "verification_checks": {
+            "authenticity": {
+              "passed": false,
+              "details": "While the document mentions the New Mexico Secretary of State and contains seemingly legitimate contact information, it lacks official logos, seals, headers, footers, and any official stamps or marks.  The structure resembles a checklist, not a completed official document. The presence of the 'STATE OF NEW MEXICO' and other official-sounding text alone is insufficient to establish authenticity."
+            },
+            "security_features": {
+              "passed": false,
+              "details": "No security features like seals, watermarks, holograms, QR codes, barcodes, digital signatures, security numbers, or anti-counterfeit measures were present. The absence of these is a major red flag for a government document."
+            },
+            "red_flags": {
+              "passed": false,
+              "details": "The most significant red flag is the lack of completed fields.  It's a blank form.  There are no signatures, critical company details (name, address, purpose, etc.), or executed date.  This makes it highly susceptible to forgery as anyone could fill it out and claim it is genuine."
+            },
+            "quality": {
+              "passed": false,
+              "details": "The quality assessment cannot be performed due to the absence of a physical document.  The JSON data representation cannot provide insight into printing quality, alignment, smudges, color consistency, or formatting beyond basic syntax."
+            }
+          },
+          "security_features_found": [],
+          "verification_summary": "The provided data represents a blank checklist, not a verified New Mexico Secretary of State document.  It lacks essential security features and crucial information necessary to confirm its authenticity.  Therefore, it is considered not genuine."
+        }
       }
     ]
   }

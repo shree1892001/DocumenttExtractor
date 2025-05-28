@@ -1242,7 +1242,7 @@ class DocumentProcessor:
 
 
 def main():
-    input_path = "D:\\imageextractor\\identites\\NewMexicoCorp.docx"
+    input_path = "D:\\imageextractor\\identites\\OIP.docx"
     api_key = API_KEY
 
     processor = DocumentProcessor(api_key=api_key)
