@@ -1,4 +1,10 @@
-API_KEY= "AIzaSyDJvOAxCnVXB23FqPUadFwQIZay1ESNEIk" or "AIzaSyDcBP8bIBztxmXJh1AL5PxkaaEFfnzSBgc"
+API_KEY = "AIzaSyDcBP8bIBztxmXJh1AL5PxkaaEFfnzSBgc"
+API_KEY_1 = "AIzaSyBmInXvdmt_yiXuRSIkzDd9-wdgZjQIMc0"
+API_KEY_2="AIzaSyACwX0Hg5QX0eDjdH-d38OstgAu5FHj1gk"
+API_KEY_3 = "AIzaSyAGtWIVqnC5kbVTIDXbXe1d-7jl5nYIP18"
+API_PORT = 9500
+# API_HOST = '192.168.1.33'
+API_HOST = '0.0.0.0'
 OPENAI_API = "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"
 DB_NAME = "test4"
 DB_USER = "postgres"
@@ -7,6 +13,11 @@ DB_PORT= 5432
 DB_SERVER_NAME="local_shreyas"
 DB_HOST = "127.0.0.1"
 DB_NAME = "test5"
+
+
+TEMPLATES_DIR = "D:\\imageextractor\\identites\\Templates"
+
+
 CLASSIFICATION_PROMPT = """
 Analyze this document image and identify the type of document by extracting only the following specific keywords if they are present: "license," "Pancard," or "aadharcard." , "passport," . Return the result in the following JSON format:        {
             "document_type": "The type of document (e.g., 'Pancard', 'License', 'AadhaarCard', 'Passport' ,'SSN' ,'passport' etc.)",
@@ -284,7 +295,7 @@ if their is button  with the name "Start Filing" or any relevant field then perf
 #### **10. Registered Agent Details**  
 -Enter the Registered Agent details in its respective fields only by identifying the label for Registered Agent
 - Detect and select if the registered agent is an individual or business entity.  
-- If required, extract and split the registered agent’s full name   "from `${jsonData["jsonData"]["Payload"]["Entity_Formation"]["Registered_Agent"]["RA_Name"]}`, then input:  
+- If required, extract and split the registered agent's full name   "from `${jsonData["jsonData"]["Payload"]["Entity_Formation"]["Registered_Agent"]["RA_Name"]}`, then input:  
   - First Name  
   - Last Name  
   -If for example the name of the registered agent is Interstate Agent Services LLC then the  First Name would be "Interstate" and the Last Name would be "Agent Services LLC"
@@ -295,7 +306,7 @@ if their is button  with the name "Start Filing" or any relevant field then perf
   - IF  in the address their is requirement of County , select `${jsonData['jsonData']['County']['countyName']} either from dropdown or enter the value in it 
 
 #### **11. Registered Agent Signature (If Required)**  
-- If a signature field exists, input the registered agent’s first and last name.  
+- If a signature field exists, input the registered agent's first and last name.  
 
 #### **12. Finalization and Submission**  
 - Identify and check any agreement or confirmation checkboxes.  
@@ -318,7 +329,148 @@ if their is button  with the name "Start Filing" or any relevant field then perf
 
     
 """
-
+MIN_CONFIDENCE_THRESHOLD=0.6
+DOCUMENT_CATEGORIES = {
+    'identity': [
+        'passport', 'national_id', 'drivers_license', 'residence_permit',
+        'citizenship_card', 'voter_id', 'aadhaar_card', 'pan_card',
+        'social_security_card', 'health_insurance_card', 'student_id',
+        'employee_id', 'military_id', 'government_id', 'immigration_document',
+        'alien_registration_card', 'refugee_id', 'temporary_resident_card',
+        'work_permit', 'visa_document', 'border_crossing_card', 'travel_document',
+        'diplomatic_id', 'consular_id', 'maritime_id', 'aviation_id',
+        'professional_license', 'occupational_license', 'medical_license',
+        'law_license', 'teaching_license', 'engineering_license'
+    ],
+    'legal': [
+        'contract', 'agreement', 'deed', 'power_of_attorney',
+        'court_order', 'legal_notice', 'affidavit', 'will',
+        'trust_deed', 'marriage_certificate', 'divorce_decree',
+        'adoption_papers', 'custody_document', 'legal_opinion',
+        'regulatory_compliance', 'intellectual_property_document',
+        'patent_document', 'trademark_registration', 'copyright_document',
+        'legal_brief', 'court_filing', 'legal_memorandum', 'legal_contract',
+        'settlement_agreement', 'arbitration_award', 'legal_judgment',
+        'legal_injunction', 'legal_subpoena', 'legal_warrant',
+        'legal_pleading', 'legal_motion', 'legal_appeal', 'legal_brief',
+        'legal_opinion', 'legal_advice', 'legal_consultation'
+    ],
+    'financial': [
+        'bank_statement', 'tax_return', 'invoice', 'receipt',
+        'credit_card_statement', 'loan_document', 'insurance_policy',
+        'investment_statement', 'mortgage_document', 'payroll_document',
+        'financial_report', 'budget_document', 'expense_report',
+        'financial_audit', 'accounting_document', 'balance_sheet',
+        'income_statement', 'cash_flow_statement', 'financial_forecast',
+        'financial_plan', 'investment_proposal', 'financial_analysis',
+        'financial_review', 'financial_summary', 'financial_statement',
+        'financial_record', 'financial_transaction', 'financial_receipt',
+        'financial_invoice', 'financial_contract', 'financial_agreement',
+        'financial_certificate', 'financial_license', 'financial_permit'
+    ],
+    'educational': [
+        'degree_certificate', 'diploma', 'transcript', 'report_card',
+        'scholarship_document', 'academic_certificate', 'enrollment_document',
+        'course_completion', 'professional_certification', 'training_certificate',
+        'academic_transcript', 'student_record', 'educational_assessment',
+        'academic_reference', 'educational_plan', 'academic_achievement',
+        'academic_award', 'academic_merit', 'academic_honor',
+        'academic_qualification', 'academic_credential', 'academic_license',
+        'academic_permit', 'academic_certification', 'academic_verification',
+        'academic_validation', 'academic_confirmation', 'academic_approval',
+        'academic_authorization', 'academic_clearance', 'academic_eligibility'
+    ],
+    'medical': [
+        'medical_report', 'prescription', 'health_insurance',
+        'vaccination_record', 'medical_certificate', 'patient_record',
+        'medical_history', 'diagnostic_report', 'treatment_plan',
+        'medical_referral', 'discharge_summary', 'medical_bill',
+        'medical_authorization', 'medical_consent', 'medical_imaging',
+        'medical_scan', 'medical_test', 'medical_lab_result',
+        'medical_analysis', 'medical_evaluation', 'medical_assessment',
+        'medical_diagnosis', 'medical_prognosis', 'medical_recommendation',
+        'medical_advice', 'medical_consultation', 'medical_opinion',
+        'medical_verification', 'medical_validation', 'medical_confirmation',
+        'medical_approval', 'medical_authorization', 'medical_clearance'
+    ],
+    'business': [
+        'business_license', 'incorporation_document', 'tax_registration',
+        'commercial_invoice', 'shipping_document', 'business_plan',
+        'company_policy', 'employee_handbook', 'business_contract',
+        'partnership_agreement', 'board_resolution', 'annual_report',
+        'business_proposal', 'marketing_document', 'business_correspondence',
+        'business_agreement', 'business_certificate', 'business_license',
+        'business_permit', 'business_registration', 'business_incorporation',
+        'business_formation', 'business_dissolution', 'business_merger',
+        'business_acquisition', 'business_sale', 'business_purchase',
+        'business_transfer', 'business_assignment', 'business_delegation',
+        'business_authorization', 'business_approval', 'business_clearance'
+    ],
+    'government': [
+        'government_id', 'permit', 'license', 'registration',
+        'certificate', 'official_letter', 'government_form',
+        'regulatory_document', 'compliance_certificate', 'government_report',
+        'official_notice', 'government_contract', 'public_record',
+        'government_authorization', 'official_documentation', 'government_approval',
+        'government_clearance', 'government_verification', 'government_validation',
+        'government_confirmation', 'government_certification', 'government_license',
+        'government_permit', 'government_registration', 'government_incorporation',
+        'government_formation', 'government_dissolution', 'government_merger',
+        'government_acquisition', 'government_sale', 'government_purchase',
+        'government_transfer', 'government_assignment', 'government_delegation'
+    ],
+    'employment': [
+        'employment_contract', 'payslip', 'tax_form',
+        'employment_certificate', 'resume', 'job_application',
+        'performance_review', 'employment_verification', 'work_permit',
+        'employee_benefits', 'termination_document', 'promotion_letter',
+        'employment_agreement', 'job_description', 'employment_record',
+        'employment_authorization', 'employment_approval', 'employment_clearance',
+        'employment_verification', 'employment_validation', 'employment_confirmation',
+        'employment_certification', 'employment_license', 'employment_permit',
+        'employment_registration', 'employment_incorporation', 'employment_formation',
+        'employment_dissolution', 'employment_merger', 'employment_acquisition',
+        'employment_sale', 'employment_purchase', 'employment_transfer'
+    ],
+    'property': [
+        'property_deed', 'mortgage_document', 'lease_agreement',
+        'property_tax_document', 'survey_document', 'title_deed',
+        'property_insurance', 'property_assessment', 'property_valuation',
+        'property_inspection', 'property_maintenance', 'property_transfer',
+        'property_development', 'property_management', 'property_contract',
+        'property_authorization', 'property_approval', 'property_clearance',
+        'property_verification', 'property_validation', 'property_confirmation',
+        'property_certification', 'property_license', 'property_permit',
+        'property_registration', 'property_incorporation', 'property_formation',
+        'property_dissolution', 'property_merger', 'property_acquisition',
+        'property_sale', 'property_purchase', 'property_transfer'
+    ],
+    'transportation': [
+        'vehicle_registration', 'vehicle_title', 'vehicle_insurance',
+        'vehicle_inspection', 'vehicle_maintenance', 'vehicle_transfer',
+        'vehicle_authorization', 'vehicle_approval', 'vehicle_clearance',
+        'vehicle_verification', 'vehicle_validation', 'vehicle_confirmation',
+        'vehicle_certification', 'vehicle_license', 'vehicle_permit',
+        'vehicle_registration', 'vehicle_incorporation', 'vehicle_formation',
+        'vehicle_dissolution', 'vehicle_merger', 'vehicle_acquisition',
+        'vehicle_sale', 'vehicle_purchase', 'vehicle_transfer',
+        'vehicle_assignment', 'vehicle_delegation', 'vehicle_authorization',
+        'vehicle_approval', 'vehicle_clearance', 'vehicle_verification'
+    ],
+    'insurance': [
+        'insurance_policy', 'insurance_certificate', 'insurance_claim',
+        'insurance_verification', 'insurance_validation', 'insurance_confirmation',
+        'insurance_certification', 'insurance_license', 'insurance_permit',
+        'insurance_registration', 'insurance_incorporation', 'insurance_formation',
+        'insurance_dissolution', 'insurance_merger', 'insurance_acquisition',
+        'insurance_sale', 'insurance_purchase', 'insurance_transfer',
+        'insurance_assignment', 'insurance_delegation', 'insurance_authorization',
+        'insurance_approval', 'insurance_clearance', 'insurance_verification',
+        'insurance_validation', 'insurance_confirmation', 'insurance_certification',
+        'insurance_license', 'insurance_permit', 'insurance_registration'
+    ],
+    'other': []  # For uncategorized document types
+}
 
 
 AUTOMATION_TASK1= f"""

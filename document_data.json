@@ -1,0 +1,12 @@
+{
+  "raw_text": "DRIVING LICENCE\n\n3. pee UNITED KINGDOM\n4a. 19.01.2013 ac. DVLA\n\nee to\n\n5. MORGATS3116SMQlJ 35\n\n7. In\nane wap Pus, eee a! Fie] @\n\nld\n\nfia\n\n= 9. AM/AIB.18/0/4/1/n/plq\nDVLA INTERNAL USE\n\na mm cm mm mm mmm a\n\n\n",
+  "extracted_fields": {},
+  "metadata": {
+    "file_path": "D:\\imageextractor\\identites\\OIP.pdf",
+    "file_type": "pdf"
+  },
+  "verification": {
+    "status": "failed",
+    "error": "Document processing failed: No security features found"
+  }
+}

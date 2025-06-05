@@ -1,0 +1,27 @@
+{
+  "file_path": "D:\\imageextractor\\identites\\OIP.docx",
+  "total_documents": 1,
+  "processing_time": 1748769125.3276734,
+  "documents": [
+    {
+      "document_index": 1,
+      "document_type": "UNKNOWN",
+      "confidence_score": 0.8,
+      "template_path": null,
+      "template_similarity": null,
+      "extracted_data": {
+        "name": "Sana Mereoyth",
+        "date_of_birth": "02/11/1976",
+        "address": "122 Burns Crescent, Edinburgh",
+        "license_number": "MORGA7Sa416SMOl",
+        "valid_from": "19/01/2013",
+        "valid_until": "18/01/2020",
+        "vehicle_categories": "25",
+        "issuing_authority": "DVLA",
+        "signature": "not present",
+        "photo": "not present",
+        "other_fields": "{\"nationality\": \"United Kingdom\", \"additional_information\": \"Some text is unclear and might represent additional information related to the license or the holder.\"}"
+      }
+    }
+  ]
+}

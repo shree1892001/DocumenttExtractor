@@ -1,0 +1,4 @@
+PAN CARD
+Name: Sample Name
+Father's Name: Sample Father's Name PAN Number: ABCDE1234F
+Date of Birth: 1990-01-01

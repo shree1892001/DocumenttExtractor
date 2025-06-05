@@ -1,0 +1,22 @@
+{
+  "file_path": "D:\\imageextractor\\identites\\merged_docs.docx",
+  "total_documents": 1,
+  "processing_time": 1748608785.5065243,
+  "documents": [
+    {
+      "document_index": 1,
+      "document_type": "DRIVING LICENSE",
+      "confidence_score": 0.8,
+      "template_path": "D:\\imageextractor\\identites\\templates\\sample_license.docx",
+      "template_similarity": 0.2803333333333333,
+      "extracted_data": {
+        "name": "Tapan Sarma",
+        "date_of_birth": "11/09/2002",
+        "address": "C/O: Kabindra Nath Sarma, Near Nalbari Polytechnic College, Chandkuchi, Nalbari, Assam - 781334",
+        "issuing_authority": "DVLA",
+        "signature": "not present",
+        "photo": "not present"
+      }
+    }
+  ]
+}

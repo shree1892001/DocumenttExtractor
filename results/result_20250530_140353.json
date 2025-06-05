@@ -1,0 +1,15 @@
+{
+  "file_path": "D:\\imageextractor\\identites\\OIP.docx",
+  "document_type": "driving_license",
+  "confidence_score": 0.85,
+  "extracted_data": {
+    "Name": "UK MORGAN",
+    "Date of Birth": "11.09.1976",
+    "Country": "UNITED KINGDOM",
+    "Issue Date": "19.01.2013",
+    "Expiry Date": "18.01.2020",
+    "License Number": "MORGA7Sa416SMOl",
+    "Address": "122 BURNS CRESCENT EDINBURGH"
+  },
+  "processing_time": 1748594033.9818652
+}

@@ -1,0 +1,15 @@
+{
+  "file_path": "D:\\imageextractor\\identites\\OIP.docx",
+  "document_type": "AADHAAR CARD",
+  "confidence_score": 0.0,
+  "template_path": "D:\\imageextractor\\identites\\templates\\sample_aadhaar.docx",
+  "template_similarity": 0.7333333333333334,
+  "extracted_data": {
+    "Name": null,
+    "Aadhaar Number": null,
+    "Gender": null,
+    "Date of Birth": null,
+    "Address": null
+  },
+  "processing_time": 1748606701.1071305
+}

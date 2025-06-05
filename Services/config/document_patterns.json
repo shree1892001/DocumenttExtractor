@@ -1,0 +1,17 @@
+{
+  "LICENSE": [
+    "(?i)licen[cs]e",
+    "(?i)valid\\s+from",
+    "(?i)valid\\s+until"
+  ],
+  "IDENTITY": [
+    "(?i)identity",
+    "(?i)id\\s+card",
+    "(?i)national\\s+id"
+  ],
+  "PASSPORT": [
+    "(?i)passport",
+    "(?i)nationality",
+    "(?i)place\\s+of\\s+birth"
+  ]
+}

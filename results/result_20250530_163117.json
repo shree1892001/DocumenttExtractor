@@ -1,0 +1,18 @@
+{
+  "file_path": "D:\\imageextractor\\identites\\OIP.docx",
+  "document_type": "DRIVING LICENSE",
+  "confidence_score": 0.6,
+  "template_path": "D:\\imageextractor\\identites\\templates\\sample_license.docx",
+  "template_similarity": 0.22125683060109294,
+  "extracted_data": {
+    "name": "IUKMORGANMEREOYTHI",
+    "date_of_birth": "10191/11111/111917161",
+    "address": "1112121 BURNSCRESCENTEDINBURGHI",
+    "valid_from": "11191/10111/121011131",
+    "valid_until": "11181/10111/121012101",
+    "issuing_authority": "IDVLAI",
+    "signature": "Inot presentI",
+    "photo": "Inot presentI"
+  },
+  "processing_time": 1748602877.4986055
+}

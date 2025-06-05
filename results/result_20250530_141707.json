@@ -1,0 +1,20 @@
+{
+  "file_path": "D:\\imageextractor\\identites\\OIP.docx",
+  "document_type": "DRIVING LICENCE",
+  "confidence_score": 1.0,
+  "extracted_data": {
+    "UK": "UK",
+    "Surname": "MORGAN",
+    "Forenames": "sana MEREOYTH",
+    "Date of Birth": "2. 11.09.1976",
+    "Country of Issue": "UNITED KINGDOM",
+    "Issue Date": "19012013",
+    "Issuing Authority": "DVLA",
+    "Expiry Date": "18012020",
+    "Driving Licence Number": "MORGA7Sa416SMOl) 25",
+    "Address Line 1": "122 BURNS CRESCENT",
+    "Address Line 2": "EDINBURGH",
+    "Postcode": "ensecP"
+  },
+  "processing_time": 1748594827.656175
+}

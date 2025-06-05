@@ -1,0 +1,18 @@
+{
+  "file_path": "D:\\imageextractor\\identites\\OIP.docx",
+  "document_type": "DRIVING LICENSE",
+  "confidence_score": 0.6,
+  "template_path": "D:\\imageextractor\\identites\\templates\\sample_license.docx",
+  "template_similarity": 0.22125683060109294,
+  "extracted_data": {
+    "name": "Morgan Mereoyth",
+    "date_of_birth": "02/11/1976",
+    "address": "122 Burns Crescent, Edinburgh",
+    "valid_from": "19/01/2013",
+    "valid_until": "18/01/2020",
+    "issuing_authority": "DVLA",
+    "signature": "not present",
+    "photo": "not present"
+  },
+  "processing_time": 1748607848.8023
+}

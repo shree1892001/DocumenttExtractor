@@ -1,6 +1,6 @@
 import fitz
 import tempfile
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 import os
 import json
 import re
@@ -24,6 +24,8 @@ import google.generativeai as genai
 from abc import ABC, abstractmethod
 import pytesseract
 from PIL import Image
+import cv2
+import numpy as np
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -273,11 +275,8 @@ class TemplateMatcher:
         }
         return indicators.get(doc_type, "Look for standard identity document fields and structure.")
 
-    def match_document(self, file_path: str) -> Dict[str, Any]:
+    def match_document(self, file_path: str, section_text: str = None) -> Dict[str, Any]:
         """Match document against templates using Gemini"""
-        if not os.path.exists(file_path):
-            raise ValueError(f"Document file not found: {file_path}")
-
         if not self.templates:
             raise ValueError("No templates available for matching")
 
@@ -285,50 +284,62 @@ class TemplateMatcher:
             'document_type': None,
             'confidence': 0.0,
             'matched_fields': {},
-            'additional_info': None
+            'additional_info': None,
+            'template_id': None,
+            'matching_details': {}
         }
 
         try:
-            text_extractor = TextExtractorFactory.create_extractor(file_path, self.api_key)
-
-            max_retries = 3
-            for attempt in range(max_retries):
-                try:
-                    input_text = text_extractor.extract_text(file_path)
-                    if input_text:
-                        break
-                except Exception as e:
-                    if attempt == max_retries - 1:
-                        raise
-                    logger.warning(f"Attempt {attempt + 1} failed: {str(e)}")
-                    continue
+            # Use provided section text if available, otherwise extract from file
+            input_text = section_text
+            if not input_text and file_path:
+                text_extractor = TextExtractorFactory.create_extractor(file_path, self.api_key)
+                max_retries = 3
+                for attempt in range(max_retries):
+                    try:
+                        input_text = text_extractor.extract_text(file_path)
+                        if input_text:
+                            break
+                    except Exception as e:
+                        if attempt == max_retries - 1:
+                            raise
+                        logger.warning(f"Attempt {attempt + 1} failed: {str(e)}")
+                        continue
 
             if not input_text:
-                raise ValueError(f"Could not extract text from document: {file_path}")
+                raise ValueError("No text content available for matching")
 
             logger.info(f"Extracted text from document: {len(input_text)} characters")
 
             # Try to match against each template
-            for doc_type, template in self.templates.items():
+            for template_id, template in self.templates.items():
                 try:
-                    prompt = self._create_template_matching_prompt(input_text, template['content'], doc_type)
+                    template_doc_type = template.get('document_type', 'unknown')
+                    prompt = self._create_template_matching_prompt(
+                        input_text,
+                        template['content'],
+                        template_doc_type
+                    )
                     response = self.text_processor.process_text(input_text, prompt)
                     match_result = json.loads(response.strip().replace("```json", "").replace("```", "").strip())
 
                     confidence = match_result.get('confidence_score', 0)
-                    logger.info(f"Template match result for {doc_type}: {confidence}")
+                    logger.info(f"Template match result for {template_id}: {confidence}")
 
                     # Update best match if this is better
                     if confidence > best_match['confidence']:
                         best_match = {
-                            'document_type': doc_type,
+                            'document_type': match_result.get('document_type'),
                             'confidence': confidence,
                             'matched_fields': match_result.get('extracted_fields', {}),
-                            'additional_info': match_result.get('additional_info')
+                            'additional_info': match_result.get('additional_info'),
+                            'template_id': template_id,
+                            'matching_details': match_result.get('matching_details', {})
                         }
-                        logger.info(f"Found better match: {doc_type} with confidence {confidence}")
+                        logger.info(f"Found better match: {template_id} with confidence {confidence}")
+                        logger.info(f"Matching details: {json.dumps(match_result.get('matching_details', {}), indent=2)}")
                 except Exception as e:
-                    logger.warning(f"Error matching template for {doc_type}: {str(e)}")
+                    logger.warning(f"Error matching template for {template_id}: {str(e)}")
                     continue
 
             if not best_match['document_type']:
@@ -376,6 +387,7 @@ class DocumentProcessor:
         self.classifier = DocumentClassifier(api_key)
         self.text_extractor = TextExtractor(api_key)
         self.text_processor = TextProcessor(api_key)
+        self.template_matcher = TemplateMatcher(api_key, templates_dir)
 
         # Define pattern-based mapping rules
         self.document_patterns = {
@@ -405,8 +417,9 @@ class DocumentProcessor:
         }
 
         # Define basic thresholds
-        self.MIN_CONFIDENCE_THRESHOLD = 0.85
-        self.MIN_GENUINENESS_SCORE = 0.8
+        self.MIN_CONFIDENCE_THRESHOLD = 0.4  # Lowered threshold for better matching
+        self.MIN_GENUINENESS_SCORE = 0.6     # Lowered threshold for genuineness check
+        self.VERIFICATION_THRESHOLD = 0.5    # New threshold for verification
 
     def _standardize_document_type(self, doc_type: str) -> str:
         """Standardize document type using pattern matching"""
@@ -530,15 +543,7 @@ class DocumentProcessor:
                                 img = Image.open(image_path)
                                 ocr_text = pytesseract.image_to_string(img)
 
-                                if not ocr_text.strip():
-                                    # If OCR fails, use Gemini Vision
-                                    response = self.text_extractor.process_with_gemini(
-                                        image_path,
-                                        "Extract all text from this document image. Return only the raw text without any formatting."
-                                    )
-                                    ocr_text = response.strip()
-
-                                if ocr_text.strip():
+                                if self._is_good_ocr_result(ocr_text):
                                     document_segments.append({
                                         "text": ocr_text.strip(),
                                         "image_path": image_path,
@@ -559,7 +564,7 @@ class DocumentProcessor:
             logger.error(f"Error extracting text from DOCX images: {str(e)}")
             return []
 
-    def process_file(self, file_path: str, min_confidence: float = 0.0) -> List[Dict[str, Any]]:
+    def process_file(self, file_path: str, min_confidence: float = 0.0)  -> List[Dict[str, Any]]:
         """Process a file that may contain multiple documents"""
         if file_path.lower().endswith('.pdf'):
             return self._process_pdf(file_path, min_confidence)
@@ -759,12 +764,13 @@ class DocumentProcessor:
 
             # If document is not genuine, reject it
             if not verification_result["is_genuine"]:
-                logger.warning(f"Document rejected - Not genuine: {verification_result['warnings']}")
+                rejection_reason = verification_result.get("rejection_reason", "Document failed authenticity verification")
+                logger.warning(f"Document rejected - Not genuine: {rejection_reason}")
                 return {
                     "status": "rejected",
                     "document_type": doc_type,
                     "source_file": source_file,
-                    "rejection_reason": "Document failed authenticity verification",
+                    "rejection_reason": rejection_reason,
                     "verification_result": verification_result
                 }
 
@@ -948,99 +954,141 @@ class DocumentProcessor:
             return None
 
     def verify_document(self, extracted_data: Dict[str, Any], doc_type: str) -> Dict[str, Any]:
-        """Verify if the document is genuine based on extracted data"""
-        verification_result = {
-            "is_genuine": False,
-            "confidence_score": 0.0,
-            "verification_checks": [],
-            "warnings": [],
-            "security_features_found": [],
-            "validation_issues": []
-        }
-
+        """Verify document authenticity and data validity"""
         try:
-            # Create comprehensive verification prompt for Gemini
+            # Create a comprehensive verification prompt
             verification_prompt = f"""
-                        You are an expert document verification AI specializing in {doc_type} verification. 
-                        Your task is to determine if this document is genuine.
+            You are a document verification expert specializing in {doc_type} verification. 
+            Analyze this document data and determine if it is genuine.
+            Provide a detailed verification report with specific checks and findings.
 
-                        Extracted Data:
-                        {json.dumps(extracted_data, indent=2)}
+            Document Data:
+            {json.dumps(extracted_data, indent=2)}
 
-                        Perform a thorough verification analysis considering:
+            Document Type: {doc_type}
 
-                        1. Document Authenticity:
-                           - Verify if this is a genuine {doc_type}
-                           - Check for official government text and formatting
-                           - Look for security features and anti-counterfeit measures
-                           - Validate document structure and layout
+            Perform the following checks:
 
-                        2. Data Validation:
-                           - Verify all identification numbers and their formats
-                           - Check date formats and their logical consistency
-                           - Validate name and address formatting
-                           - Look for any data inconsistencies
+            1. Document Authenticity:
+               - Verify presence of required fields for {doc_type}
+               - Check for official text and formatting
+               - Validate document structure and layout
+               - Check for security features specific to {doc_type}
+               - Verify document quality and printing standards
+               - Look for official headers and footers
+               - Check for any official stamps or marks
 
-                        3. Security Features:
-                           - Identify all security features present
-                           - Check for official seals, watermarks, or holograms
-                           - Look for security patterns or microtext
-                           - Verify presence of QR codes or barcodes
+            2. Security Feature Analysis:
+               - Look for official seals and stamps
+               - Check for watermarks or holograms
+               - Verify presence of security patterns
+               - Look for QR codes or barcodes
+               - Check for any digital signatures
+               - Verify any security numbers or codes
+               - Look for any anti-counterfeit measures
 
-                        4. Red Flags:
-                           - Look for any inconsistencies in the data
-                           - Check for missing critical information
-                           - Identify suspicious patterns or anomalies
-                           - Verify logical relationships between fields
+            3. Data Validation:
+               - Verify all identification numbers and their formats
+               - Check date formats and their logical consistency
+               - Validate name and address formatting
+               - Look for any data inconsistencies
+               - Verify field relationships and dependencies
+               - Check for logical data patterns
+               - Validate any reference numbers
 
-                        Return a JSON response with:
-                        {{
-                            "is_genuine": true/false,
-                            "confidence_score": 0.0-1.0,
-                            "verification_checks": [
-                                {{
-                                    "check_type": "type of check",
-                                    "status": "passed/failed",
-                                    "details": "explanation"
-                                }}
-                            ],
-                            "security_features_found": ["list of found features"],
-                            "validation_issues": ["list of issues"],
-                            "verification_summary": "detailed explanation of why the document is genuine or not"
-                        }}
+            4. Document Quality:
+               - Check printing quality
+               - Verify text alignment
+               - Check for any smudges or marks
+               - Verify color consistency
+               - Check for any signs of poor quality
+               - Verify professional formatting
+               - Check for any signs of manipulation
 
-                        Important:
-                        - Be thorough in your analysis
-                        - Consider all aspects of document authenticity
-                        - Look for any signs of forgery or tampering
-                        - Provide detailed explanations for your decisions
-                        """
+            Return a JSON response with:
+            {{
+                "is_genuine": true/false,
+                "confidence_score": 0.0-1.0,
+                "rejection_reason": "reason if not genuine",
+                "verification_checks": {{
+                    "authenticity": {{
+                        "passed": true/false,
+                        "details": "explanation",
+                        "confidence": 0.0-1.0
+                    }},
+                    "security_features": {{
+                        "passed": true/false,
+                        "details": "explanation",
+                        "confidence": 0.0-1.0
+                    }},
+                    "data_validation": {{
+                        "passed": true/false,
+                        "details": "explanation",
+                        "confidence": 0.0-1.0
+                    }},
+                    "quality": {{
+                        "passed": true/false,
+                        "details": "explanation",
+                        "confidence": 0.0-1.0
+                    }}
+                }},
+                "security_features_found": ["list of security features"],
+                "verification_summary": "Overall verification summary",
+                "recommendations": ["list of recommendations for improvement"]
+            }}
+
+            Important:
+            - Be thorough but fair in your analysis
+            - Consider document-specific requirements for {doc_type}
+            - Account for variations in official document formats
+            - Consider both digital and physical security features
+            - Look for logical consistency in the data
+            - Consider the document's intended use
+            - Be lenient with minor formatting variations
+            - Focus on key security features and data validity
+            - Consider official document standards
+            - Account for regional variations in document formats
+            """
 
             # Process with Gemini
             response = self.text_processor.process_text(json.dumps(extracted_data), verification_prompt)
-            verification_data = json.loads(response.strip().replace("```json", "").replace("```", "").strip())
+            verification_result = json.loads(response.strip().replace("```json", "").replace("```", "").strip())
+
+            # Calculate overall confidence score
+            checks = verification_result.get("verification_checks", {})
+            confidence_scores = [
+                checks.get("authenticity", {}).get("confidence", 0),
+                checks.get("security_features", {}).get("confidence", 0),
+                checks.get("data_validation", {}).get("confidence", 0),
+                checks.get("quality", {}).get("confidence", 0)
+            ]
+            overall_confidence = sum(confidence_scores) / len(confidence_scores) if confidence_scores else 0
 
             # Update verification result
-            verification_result["is_genuine"] = verification_data.get("is_genuine", False)
-            verification_result["confidence_score"] = verification_data.get("confidence_score", 0.0)
-            verification_result["verification_checks"] = verification_data.get("verification_checks", [])
-            verification_result["security_features_found"] = verification_data.get("security_features_found", [])
-            verification_result["validation_issues"] = verification_data.get("validation_issues", [])
-            verification_result["verification_summary"] = verification_data.get("verification_summary", "")
+            verification_result["confidence_score"] = overall_confidence
+            verification_result["is_genuine"] = overall_confidence >= self.VERIFICATION_THRESHOLD
 
-            # Only check confidence threshold
-            if verification_result["confidence_score"] < self.MIN_CONFIDENCE_THRESHOLD:
-                verification_result["is_genuine"] = False
-                verification_result["warnings"].append(
-                    f"Low confidence score: {verification_result['confidence_score']} < {self.MIN_CONFIDENCE_THRESHOLD}"
-                )
+            # Log verification results
+            logger.info(f"Document verification results: {json.dumps(verification_result, indent=2)}")
 
             return verification_result
 
         except Exception as e:
-            logger.error(f"Error in document verification: {str(e)}")
-            verification_result["warnings"].append(f"Verification error: {str(e)}")
-            return verification_result
+            logger.exception(f"Error verifying document genuineness: {str(e)}")
+            return {
+                "is_genuine": False,
+                "confidence_score": 0.0,
+                "rejection_reason": f"Error during verification: {str(e)}",
+                "verification_checks": {
+                    "authenticity": {"passed": False, "details": f"Error during verification: {str(e)}", "confidence": 0.0},
+                    "security_features": {"passed": False, "details": "Verification failed", "confidence": 0.0},
+                    "data_validation": {"passed": False, "details": "Verification failed", "confidence": 0.0},
+                    "quality": {"passed": False, "details": "Verification failed", "confidence": 0.0}
+                },
+                "security_features_found": [],
+                "verification_summary": f"Document verification failed due to error: {str(e)}",
+                "recommendations": ["Verification process failed due to technical error"]
+            }
 
     def _validate_with_leniency(self, extracted_data: Dict[str, Any], doc_type: str) -> bool:
         """Validate extracted data with lenient rules for low confidence matches"""
@@ -1240,10 +1288,75 @@ class DocumentProcessor:
             verification_result["rejection_reason"] = f"Verification error: {str(e)}"
             return verification_result
 
+    def _identify_documents(self, text: str) -> List[Tuple[str, str]]:
+        """Identify separate documents in the text using template matching"""
+        try:
+            # Split text into chunks based on natural breaks
+            chunks = self._split_into_chunks(text)
+            logger.info(f"Split text into {len(chunks)} chunks")
+
+            documents = []
+            for chunk in chunks:
+                if not chunk.strip():
+                    continue
+
+                # Try to match this chunk against templates
+                try:
+                    # Create a temporary file for the chunk
+                    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as temp_file:
+                        temp_file.write(chunk)
+                        temp_file_path = temp_file.name
+
+                    try:
+                        template_match = self.template_matcher.match_document(temp_file_path, chunk)
+                        if template_match and template_match['confidence'] >= self.MIN_CONFIDENCE_THRESHOLD:
+                            documents.append((chunk, template_match['document_type']))
+                            logger.info(f"Identified document of type: {template_match['document_type']}")
+                    finally:
+                        # Clean up temporary file
+                        try:
+                            os.unlink(temp_file_path)
+                        except Exception as e:
+                            logger.warning(f"Error cleaning up temporary file: {str(e)}")
+
+                except Exception as e:
+                    logger.warning(f"Error matching chunk: {str(e)}")
+                    continue
+
+            # If no documents were identified, return the whole text as one document
+            if not documents:
+                documents = [(text, "unknown")]
+
+            return documents
+
+        except Exception as e:
+            logger.error(f"Error identifying documents: {str(e)}")
+            return [(text, "unknown")]
+
+    def _is_good_ocr_result(self, ocr_text: str) -> bool:
+        """Check if the OCR result is good enough"""
+        return len(ocr_text.strip()) > 50  # Minimum threshold for meaningful content
+
+    def _calculate_ocr_confidence(self, text: str) -> float:
+        # Check for common OCR errors
+        error_patterns = [
+            r'[|]{2,}',  # Multiple vertical bars
+            r'[l1]{3,}',  # Multiple l or 1
+            r'[o0]{3,}',  # Multiple o or 0
+            r'[rn]{3,}',  # Multiple r or n
+            r'\s{3,}'     # Multiple spaces
+        ]
+        
+        # Calculate confidence based on:
+        # - Error patterns
+        # - Text length
+        # - Number of lines
+        # - Number of words
+
 
 def main():
-    input_path = "D:\\imageextractor\\identites\\NewMexicoCorp.docx"
-    api_key = API_KEY
+    input_path = "D:\\imageextractor\\identites\\OIP.jpg"
+    api_key = API_KEY_1
 
     processor = DocumentProcessor(api_key=api_key)
 

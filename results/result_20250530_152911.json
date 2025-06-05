@@ -1,0 +1,17 @@
+{
+  "file_path": "D:\\imageextractor\\identites\\OIP.docx",
+  "document_type": "DRIVING LICENSE",
+  "confidence_score": 0.5,
+  "template_path": "D:\\imageextractor\\identites\\templates\\sample_license.docx",
+  "template_similarity": 0.22355191256830603,
+  "extracted_data": {
+    "Name": "MORGAN",
+    "License Number": null,
+    "Date of Birth": "11.09.1976",
+    "Address": "122BURNS cAESCENT epINSURGH",
+    "Valid From": "19012013",
+    "Valid Until": "18012020",
+    "Vehicle Categories": null
+  },
+  "processing_time": 1748599151.2021787
+}

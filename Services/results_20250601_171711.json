@@ -1,0 +1,23 @@
+{
+  "file_path": "D:\\imageextractor\\identites\\OIP.docx",
+  "total_documents": 1,
+  "processing_time": 1748778431.0749998,
+  "documents": [
+    {
+      "document_index": 1,
+      "document_type": "UNKNOWN",
+      "confidence_score": 0.8,
+      "template_path": null,
+      "template_similarity": null,
+      "extracted_data": {
+        "licence_number": "MORGA7Sa416SMOl",
+        "name": "Sana Mereoyth",
+        "date_of_birth": "11/09/1976",
+        "nationality": "UNITEDKINGDOM",
+        "address": "122 Burns Crescent, Edinburgh",
+        "issue_date": "19/01/2013",
+        "expiry_date": "18/01/2020"
+      }
+    }
+  ]
+}

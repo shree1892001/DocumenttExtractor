@@ -1,6 +1,6 @@
 import fitz
 import tempfile
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 import os
 import json
 import re
@@ -65,7 +65,6 @@ class TextProcessor:
 
 
 class TemplateMatcher:
-    # Define document type mapping as a class variable
     document_type_mapping = {
         "aadhaar": "aadhaar_card",
         "aadhaarcard": "aadhaar_card",
@@ -78,10 +77,8 @@ class TemplateMatcher:
         "dl": "license"
     }
 
-    # Define supported file extensions
-    SUPPORTED_EXTENSIONS = {'.docx', '.pdf', '.jpg', '.jpeg', '.png', '.tiff', '.bmp', '.txt'}
+    SUPPORTED_EXTENSIONS = {'.docx', '.pdf', '.jpg', '.jpeg', '.png', '.tiff', '.bmp'}
 
-    # Define confidence thresholds
     MIN_CONFIDENCE_THRESHOLD = 0.4
     HIGH_CONFIDENCE_THRESHOLD = 0.8
 
@@ -90,12 +87,10 @@ class TemplateMatcher:
         self.api_key = api_key
         self.text_processor = TextProcessor(api_key)
 
-        # Validate templates directory
         if not os.path.exists(self.templates_dir):
             logger.error(f"Templates directory does not exist: {self.templates_dir}")
             raise ValueError(f"Templates directory not found: {self.templates_dir}")
 
-        # Load templates
         self.templates = self._load_templates()
         if not self.templates:
             logger.error(f"No valid templates found in directory: {self.templates_dir}")
@@ -116,21 +111,19 @@ class TemplateMatcher:
                 file_path = os.path.join(self.templates_dir, filename)
                 file_ext = os.path.splitext(filename)[1].lower()
 
-                # Skip unsupported file formats
                 if file_ext not in self.SUPPORTED_EXTENSIONS:
                     logger.debug(f"Skipping unsupported file format: {filename}")
                     continue
 
                 if os.path.isfile(file_path):
                     try:
-                        # Extract document type from filename
+
                         doc_type = filename.replace('sample_', '').replace('.docx', '').replace('.pdf', '').replace(
                             '.jpg', '').replace('.png', '')
                         doc_type = self._standardize_document_type(doc_type)
 
                         logger.info(f"Processing template: {filename} as {doc_type}")
 
-                        # Use TextExtractorFactory to get appropriate extractor
                         text_extractor = TextExtractorFactory.create_extractor(file_path, self.api_key)
                         template_text = text_extractor.extract_text(file_path)
 
@@ -161,11 +154,11 @@ class TemplateMatcher:
     def _extract_fields_from_text(self, text: str) -> set:
         """Extract potential field names from text"""
         fields = set()
-        # Look for text between brackets or after colons
+
         field_patterns = [
-            r'\{([^}]+)\}',  # {field_name}
-            r'([^:]+):',  # field_name:
-            r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)'  # Capitalized words
+            r'\{([^}]+)\}',
+            r'([^:]+):',
+            r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)'
         ]
 
         for pattern in field_patterns:
@@ -192,54 +185,101 @@ class TemplateMatcher:
             "license": "license",
             "driving license": "license",
             "dl": "license",
-            "indian_license": "license",
-            "florida_license": "license",
             "passport": "passport"
         }
         return mapping.get(doc_type, doc_type)
 
     def _create_template_matching_prompt(self, input_text: str, template_content: str, doc_type: str) -> str:
         """Create a prompt for Gemini to match document against template"""
+
+        doc_info = self.document_system.get_document_type(input_text)
+
+        passport_instructions = ""
+        if doc_type.lower() == 'passport':
+            passport_instructions = """
+            For passport documents, pay special attention to:
+            1. Passport number format and location
+            2. Type/Category of passport
+            3. Country code and issuing country
+            4. Personal information (name, nationality, DOB, etc.)
+            5. Dates (issue, expiry)
+            6. Authority information
+            7. Machine readable zone (MRZ) if present
+            8. Security features and official elements
+
+            Common passport layouts:
+            - Standard passport layout with personal details
+            - Machine readable zone at the bottom
+            - Official stamps and seals
+            - Security features like holograms
+            - Country-specific formatting
+
+            Be lenient with:
+            - Different passport formats from various countries
+            - Variations in field labels and positions
+            - Different date formats
+            - Various security feature implementations
+            - Regional variations in layout
+            """
+
         return f"""
-                    You are a document analysis expert specializing in identity document verification. Your task is to analyze if the given document matches the {doc_type} template structure.
+            You are a document analysis expert specializing in document verification. Your task is to analyze if the given document matches the {doc_type} template structure.
 
-                    Document Text:
-                    {input_text}
+            Document Information:
+            Type: {doc_info['document_type']}
+            Category: {doc_info.get('category', 'unknown')}
+            Confidence: {doc_info.get('confidence', 0.0)}
 
-                    Template Structure:
-                    {template_content}
+            Document Text:
+            {input_text}
 
-                    Please analyze the document and return a JSON response with:
-                    1. Whether this document matches the {doc_type} template (true/false)
-                    2. Confidence score (0-1) based on:
-                       - Key field presence (0.3 weight): Check if essential fields like name, ID number, etc. are present
-                       - Content similarity (0.3 weight): Compare the actual content with template
-                       - Structure match (0.2 weight): Layout and organization similarity
-                       - Format consistency (0.2 weight): Consistent formatting and style
+            Template Structure:
+            {template_content}
 
-                    For {doc_type} specifically, look for these key indicators:
-                    {self._get_document_specific_indicators(doc_type)}
+            {passport_instructions}
 
-                    3. Extracted fields based on the template structure
-                    4. Any additional relevant information found
+            Please analyze the document and return a JSON response with:
+            1. Whether this document matches the template (true/false)
+            2. Confidence score (0-1) based on:
+               - Key field presence (0.3 weight)
+               - Content similarity (0.3 weight)
+               - Structure match (0.2 weight)
+               - Format consistency (0.2 weight)
 
-                    Format the response as:
-                    {{
-                        "matches_template": true/false,
-                        "confidence_score": 0.0-1.0,
-                        "extracted_fields": {{
-                            "field1": "value1",
-                            "field2": "value2"
-                        }},
-                        "additional_info": "any additional relevant information"
-                    }}
+            3. Extracted fields based on the template structure
+            4. Any additional relevant information found
 
-                    Important:
-                    - Consider partial matches if key fields are present
-                    - Account for variations in formatting and layout
-                    - Be lenient with confidence scoring if key identifiers are present
-                    - Consider a match if confidence score is above 0.4 and key fields are present
-                    """
+            Format the response as:
+            {{
+                "matches_template": true/false,
+                "confidence_score": 0.0-1.0,
+                "extracted_fields": {{
+                    "field1": "value1",
+                    "field2": "value2"
+                }},
+                "additional_info": "any additional relevant information",
+                "matching_details": {{
+                    "field_match": 0.0-1.0,
+                    "structure_match": 0.0-1.0,
+                    "format_match": 0.0-1.0,
+                    "content_match": 0.0-1.0
+                }},
+                "document_info": {{
+                    "type": "{doc_info['document_type']}",
+                    "category": "{doc_info.get('category', 'unknown')}",
+                    "confidence": {doc_info.get('confidence', 0.0)}
+                }}
+            }}
+
+            Important:
+            - Consider partial matches if key fields are present
+            - Account for variations in formatting and layout
+            - Be lenient with confidence scoring if key identifiers are present
+            - Consider a match if confidence score is above 0.4 and key fields are present
+            - Look for document-specific security features and official elements
+            - Consider regional variations in document formats
+            - Account for different versions of the same document type
+            """
 
     def _get_document_specific_indicators(self, doc_type: str) -> str:
         """Get document-specific indicators for matching"""
@@ -273,11 +313,8 @@ class TemplateMatcher:
         }
         return indicators.get(doc_type, "Look for standard identity document fields and structure.")
 
-    def match_document(self, file_path: str) -> Dict[str, Any]:
+    def match_document(self, file_path: str, section_text: str = None) -> Dict[str, Any]:
         """Match document against templates using Gemini"""
-        if not os.path.exists(file_path):
-            raise ValueError(f"Document file not found: {file_path}")
-
         if not self.templates:
             raise ValueError("No templates available for matching")
 
@@ -285,15 +322,15 @@ class TemplateMatcher:
             'document_type': None,
             'confidence': 0.0,
             'matched_fields': {},
-            'additional_info': None
+            'additional_info': None,
+            'template_id': None,
+            'matching_details': {}
         }
 
         try:
-            # For .txt files, read the content directly
-            if file_path.lower().endswith('.txt'):
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    input_text = f.read()
-            else:
+
+            input_text = section_text
+            if not input_text and file_path:
                 text_extractor = TextExtractorFactory.create_extractor(file_path, self.api_key)
                 max_retries = 3
                 for attempt in range(max_retries):
@@ -308,31 +345,38 @@ class TemplateMatcher:
                         continue
 
             if not input_text:
-                raise ValueError(f"Could not extract text from document: {file_path}")
+                raise ValueError("No text content available for matching")
 
             logger.info(f"Extracted text from document: {len(input_text)} characters")
 
-            # Try to match against each template
-            for doc_type, template in self.templates.items():
+            for template_id, template in self.templates.items():
                 try:
-                    prompt = self._create_template_matching_prompt(input_text, template['content'], doc_type)
+                    template_doc_type = template.get('document_type', 'unknown')
+                    prompt = self._create_template_matching_prompt(
+                        input_text,
+                        template['content'],
+                        template_doc_type
+                    )
                     response = self.text_processor.process_text(input_text, prompt)
                     match_result = json.loads(response.strip().replace("```json", "").replace("```", "").strip())
 
                     confidence = match_result.get('confidence_score', 0)
-                    logger.info(f"Template match result for {doc_type}: {confidence}")
+                    logger.info(f"Template match result for {template_id}: {confidence}")
 
-                    # Update best match if this is better
                     if confidence > best_match['confidence']:
                         best_match = {
-                            'document_type': doc_type,
+                            'document_type': match_result.get('document_type'),
                             'confidence': confidence,
                             'matched_fields': match_result.get('extracted_fields', {}),
-                            'additional_info': match_result.get('additional_info')
+                            'additional_info': match_result.get('additional_info'),
+                            'template_id': template_id,
+                            'matching_details': match_result.get('matching_details', {})
                         }
-                        logger.info(f"Found better match: {doc_type} with confidence {confidence}")
+                        logger.info(f"Found better match: {template_id} with confidence {confidence}")
+                        logger.info(
+                            f"Matching details: {json.dumps(match_result.get('matching_details', {}), indent=2)}")
                 except Exception as e:
-                    logger.warning(f"Error matching template for {doc_type}: {str(e)}")
+                    logger.warning(f"Error matching template for {template_id}: {str(e)}")
                     continue
 
             if not best_match['document_type']:
@@ -354,10 +398,9 @@ class DocumentClassifier:
 
     def identify_document_type(self, file_path: str) -> DocumentInfo:
         try:
-            # Match against templates using Gemini
+
             template_match = self.template_matcher.match_document(file_path)
 
-            # Use the best match even if below threshold
             if template_match['document_type']:
                 return DocumentInfo(
                     document_type=template_match['document_type'],
@@ -373,351 +416,6 @@ class DocumentClassifier:
             raise ValueError(f"Failed to classify document: {str(e)}")
 
 
-class DocumentLearner:
-    def __init__(self, api_key: str, templates_dir: str):
-        self.api_key = api_key
-        self.templates_dir = templates_dir
-        self.text_processor = TextProcessor(api_key)
-        self.learning_data = self._load_learning_data()
-
-    def _load_learning_data(self) -> Dict[str, Any]:
-        """Load or initialize learning data"""
-        try:
-            data_path = os.path.join(os.path.dirname(self.templates_dir), 'data', 'learning_data.json')
-            if os.path.exists(data_path):
-                with open(data_path, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-        except Exception as e:
-            logger.warning(f"Could not load learning data: {str(e)}")
-
-        return {
-            "document_types": {},
-            "field_patterns": {},
-            "common_phrases": {},
-            "structure_patterns": {}
-        }
-
-    def _save_learning_data(self):
-        """Save learning data"""
-        try:
-            data_path = os.path.join(os.path.dirname(self.templates_dir), 'data', 'learning_data.json')
-            os.makedirs(os.path.dirname(data_path), exist_ok=True)
-            with open(data_path, 'w', encoding='utf-8') as f:
-                json.dump(self.learning_data, f, indent=2)
-        except Exception as e:
-            logger.error(f"Error saving learning data: {str(e)}")
-
-    def identify_document_type(self, text: str) -> Dict[str, Any]:
-        """Identify document type using learned patterns and AI"""
-        try:
-            # Use Gemini to analyze document
-            prompt = f"""
-            Analyze this document and determine its type.
-            Consider the content, structure, and purpose.
-            If it matches a known document type, identify it.
-            If it's a new type, suggest a classification.
-
-            Text:
-            {text}
-
-            Return a JSON object with:
-            {{
-                "document_type": "identified or suggested type",
-                "confidence": 0-1,
-                "reasoning": "explanation",
-                "is_new_type": true/false,
-                "key_characteristics": ["list of characteristics"],
-                "suggested_fields": ["list of fields to extract"]
-            }}
-
-            Important:
-            - Always include document_type and confidence
-            - If is_new_type is true, include key_characteristics
-            - If is_new_type is true, document_type should be the suggested type
-            - Return ONLY the JSON object, no additional text
-            """
-            response = self.text_processor.process_text(text, prompt)
-            
-            # Clean the response to ensure it's valid JSON
-            response = response.strip()
-            if response.startswith("```json"):
-                response = response[7:]
-            if response.endswith("```"):
-                response = response[:-3]
-            response = response.strip()
-            
-            try:
-                result = json.loads(response)
-            except json.JSONDecodeError as e:
-                logger.error(f"Invalid JSON response: {response}")
-                return {
-                    "document_type": "unknown",
-                    "confidence": 0.0,
-                    "reasoning": "Invalid response format",
-                    "is_new_type": True,
-                    "key_characteristics": [],
-                    "suggested_fields": []
-                }
-
-            # Ensure required fields are present
-            if "document_type" not in result:
-                result["document_type"] = "unknown"
-            if "confidence" not in result:
-                result["confidence"] = 0.0
-            if "is_new_type" not in result:
-                result["is_new_type"] = True
-            if "key_characteristics" not in result:
-                result["key_characteristics"] = []
-            if "suggested_fields" not in result:
-                result["suggested_fields"] = []
-
-            # If it's a known type, enhance with learned patterns
-            if not result["is_new_type"] and result["document_type"] in self.learning_data["document_types"]:
-                known_type = self.learning_data["document_types"][result["document_type"]]
-                result["confidence"] *= (1 + len(known_type["common_phrases"]) / 100)
-                result["suggested_fields"].extend(known_type.get("common_fields", []))
-
-            return result
-
-        except Exception as e:
-            logger.error(f"Error identifying document type: {str(e)}")
-            return {
-                "document_type": "unknown",
-                "confidence": 0.0,
-                "reasoning": f"Error during identification: {str(e)}",
-                "is_new_type": True,
-                "key_characteristics": [],
-                "suggested_fields": []
-            }
-
-    def learn_new_document_type(self, doc_type: str, text: str, characteristics: List[str]) -> None:
-        """Learn from a new document type"""
-        try:
-            if doc_type not in self.learning_data["document_types"]:
-                self.learning_data["document_types"][doc_type] = {
-                    "samples": [],
-                    "common_phrases": set(),
-                    "common_fields": set(),
-                    "structure_patterns": []
-                }
-
-            # Extract common phrases
-            prompt = f"""
-            Extract key phrases from this document that are characteristic of its type.
-            Focus on official terms, headers, and unique identifiers.
-
-            Text:
-            {text}
-
-            Return a JSON array of phrases.
-            """
-            response = self.text_processor.process_text(text, prompt)
-            phrases = json.loads(response.strip())
-            self.learning_data["document_types"][doc_type]["common_phrases"].update(phrases)
-
-            # Learn document structure
-            prompt = f"""
-            Analyze the structure of this document and identify key structural elements.
-            Focus on layout, sections, and organization.
-
-            Text:
-            {text}
-
-            Return a JSON object describing the document structure.
-            """
-            response = self.text_processor.process_text(text, prompt)
-            structure = json.loads(response.strip())
-            self.learning_data["document_types"][doc_type]["structure_patterns"].append(structure)
-
-            # Save updated learning data
-            self._save_learning_data()
-            logger.info(f"Learned new document type: {doc_type}")
-
-        except Exception as e:
-            logger.error(f"Error learning new document type: {str(e)}")
-
-    def extract_fields(self, text: str, doc_type: str) -> Dict[str, Any]:
-        """Extract fields using learned patterns and AI"""
-        try:
-            # Get learned patterns for this document type
-            patterns = self.learning_data["document_types"].get(doc_type, {})
-            
-            # Use Gemini to extract fields
-            prompt = f"""
-            Extract fields from this document.
-            Consider these known characteristics:
-            {json.dumps(patterns, indent=2)}
-
-            Text:
-            {text}
-
-            Return a JSON object with extracted fields.
-            For example:
-            {{
-                "name": "John Doe",
-                "id_number": "123456789",
-                "date_of_birth": "1990-01-01",
-                "address": "123 Main St",
-                "issue_date": "2020-01-01",
-                "expiry_date": "2030-01-01"
-            }}
-
-            Important:
-            - Extract ALL visible information from the document
-            - If a field is not found, use null as the value
-            - For dates, use YYYY-MM-DD format
-            - For numbers, extract them exactly as shown
-            - For names and addresses, preserve the exact spelling and formatting
-            - Return ONLY the JSON object, no additional text
-            """
-            response = self.text_processor.process_text(text, prompt)
-            
-            # Clean the response
-            response = response.strip()
-            if response.startswith("```json"):
-                response = response[7:]
-            if response.endswith("```"):
-                response = response[:-3]
-            response = response.strip()
-            
-            try:
-                extracted_fields = json.loads(response)
-            except json.JSONDecodeError as e:
-                logger.error(f"Invalid JSON response from field extraction: {response}")
-                # Try to extract fields using a simpler approach
-                return self._extract_fields_fallback(text, doc_type)
-
-            # Learn from this extraction
-            self._learn_from_extraction(doc_type, text, extracted_fields)
-
-            return extracted_fields
-
-        except Exception as e:
-            logger.error(f"Error extracting fields: {str(e)}")
-            # Try fallback extraction
-            return self._extract_fields_fallback(text, doc_type)
-
-    def _extract_fields_fallback(self, text: str, doc_type: str) -> Dict[str, Any]:
-        """Fallback method for field extraction when primary method fails"""
-        try:
-            prompt = f"""
-            Extract basic information from this document.
-            Look for common fields like name, ID number, dates, and addresses.
-
-            Text:
-            {text}
-
-            Return a JSON object with these fields:
-            {{
-                "name": "full name if found",
-                "id_number": "identification number if found",
-                "date_of_birth": "birth date if found (YYYY-MM-DD)",
-                "address": "full address if found",
-                "issue_date": "document issue date if found (YYYY-MM-DD)",
-                "expiry_date": "document expiry date if found (YYYY-MM-DD)"
-            }}
-
-            Important:
-            - Use null for any field not found
-            - Return ONLY the JSON object
-            """
-            response = self.text_processor.process_text(text, prompt)
-            
-            # Clean the response
-            response = response.strip()
-            if response.startswith("```json"):
-                response = response[7:]
-            if response.endswith("```"):
-                response = response[:-3]
-            response = response.strip()
-            
-            try:
-                return json.loads(response)
-            except json.JSONDecodeError:
-                logger.error("Fallback field extraction also failed")
-                return {
-                    "name": None,
-                    "id_number": None,
-                    "date_of_birth": None,
-                    "address": None,
-                    "issue_date": None,
-                    "expiry_date": None
-                }
-        except Exception as e:
-            logger.error(f"Error in fallback field extraction: {str(e)}")
-            return {
-                "name": None,
-                "id_number": None,
-                "date_of_birth": None,
-                "address": None,
-                "issue_date": None,
-                "expiry_date": None
-            }
-
-    def _learn_from_extraction(self, doc_type: str, text: str, fields: Dict[str, Any]) -> None:
-        """Learn from successful field extraction"""
-        try:
-            if doc_type not in self.learning_data["document_types"]:
-                return
-
-            # Convert sets to lists for JSON serialization
-            if "common_fields" in self.learning_data["document_types"][doc_type]:
-                self.learning_data["document_types"][doc_type]["common_fields"] = list(
-                    self.learning_data["document_types"][doc_type]["common_fields"]
-                )
-            if "common_phrases" in self.learning_data["document_types"][doc_type]:
-                self.learning_data["document_types"][doc_type]["common_phrases"] = list(
-                    self.learning_data["document_types"][doc_type]["common_phrases"]
-                )
-
-            # Update common fields
-            self.learning_data["document_types"][doc_type]["common_fields"] = list(
-                set(self.learning_data["document_types"][doc_type]["common_fields"]).union(set(fields.keys()))
-            )
-
-            # Learn field patterns
-            for field_name, field_value in fields.items():
-                if field_value:
-                    prompt = f"""
-                    Find the pattern in the text that indicates the field "{field_name}" with value "{field_value}".
-                    Return a JSON object with the pattern and context.
-
-                    Text:
-                    {text}
-
-                    Return ONLY the JSON object, no additional text.
-                    """
-                    response = self.text_processor.process_text(text, prompt)
-                    
-                    # Clean the response
-                    response = response.strip()
-                    if response.startswith("```json"):
-                        response = response[7:]
-                    if response.endswith("```"):
-                        response = response[:-3]
-                    response = response.strip()
-                    
-                    try:
-                        pattern = json.loads(response)
-                    except json.JSONDecodeError:
-                        continue
-
-                    if "field_patterns" not in self.learning_data:
-                        self.learning_data["field_patterns"] = {}
-                    if doc_type not in self.learning_data["field_patterns"]:
-                        self.learning_data["field_patterns"][doc_type] = {}
-                    if field_name not in self.learning_data["field_patterns"][doc_type]:
-                        self.learning_data["field_patterns"][doc_type][field_name] = []
-
-                    self.learning_data["field_patterns"][doc_type][field_name].append(pattern)
-
-            # Save updated learning data
-            self._save_learning_data()
-
-        except Exception as e:
-            logger.warning(f"Error learning from extraction: {str(e)}")
-
-
 class DocumentProcessor:
     def __init__(self, api_key: str, templates_dir: str = "D:\\imageextractor\\identites\\Templates"):
         self.api_key = api_key
@@ -725,189 +423,73 @@ class DocumentProcessor:
         self.classifier = DocumentClassifier(api_key)
         self.text_extractor = TextExtractor(api_key)
         self.text_processor = TextProcessor(api_key)
-        self.document_learner = DocumentLearner(api_key, templates_dir)
         self.template_matcher = TemplateMatcher(api_key, templates_dir)
 
-        # Load document mappings from configuration
-        self.document_mappings = self._load_document_mappings()
-        
-        # Define basic thresholds
-        self.MIN_CONFIDENCE_THRESHOLD = 0.4  # Lowered threshold for better matching
-        self.MIN_GENUINENESS_SCORE = 0.6     # Lowered threshold for genuineness check
+        self.document_patterns = {
+            'license': [
+                r'(?i)license|dl|driving|permit|rto|dmv',
+                r'(?i)vehicle|motor|transport',
+                r'(?i)driver|driving'
+            ],
+            'aadhaar_card': [
+                r'(?i)aadhaar|aadhar|uidai|unique\s*id',
+                r'(?i)आधार|यूआईडीएआई'
+            ],
+            'pan_card': [
+                r'(?i)pan|permanent\s*account|income\s*tax',
+                r'(?i)tax\s*id|tax\s*number'
+            ],
+            'passport': [
+                r'(?i)passport|travel\s*doc|nationality',
+                r'(?i)immigration|border|customs'
+            ]
+        }
 
-    def _load_document_mappings(self) -> Dict[str, Any]:
-        """Load document mappings from configuration file"""
-        try:
-            config_path = os.path.join(os.path.dirname(self.templates_dir), 'config', 'document_mappings.json')
-            if os.path.exists(config_path):
-                with open(config_path, 'r', encoding='utf-8') as f:
-                    return json.load(f)
+        self.compiled_patterns = {
+            doc_type: [re.compile(pattern) for pattern in patterns]
+            for doc_type, patterns in self.document_patterns.items()
+        }
 
-            # If config file doesn't exist, create default mappings
-            default_mappings = {
-                "document_types": {
-                    "identity_documents": {
-                        "aadhaar_card": {
-                            "patterns": [
-                                r"(?i)aadhaar|aadhar|uidai|unique\s*id",
-                                r"(?i)आधार|यूआईडीएआई"
-                            ],
-                            "fields": [
-                                "aadhaar_number",
-                                "name",
-                                "date_of_birth",
-                                "gender",
-                                "address"
-                            ]
-                        },
-                        "pan_card": {
-                            "patterns": [
-                                r"(?i)pan|permanent\s*account|income\s*tax",
-                                r"(?i)tax\s*id|tax\s*number"
-                            ],
-                            "fields": [
-                                "pan_number",
-                                "name",
-                                "father_name",
-                                "date_of_birth"
-                            ]
-                        },
-                        "license": {
-                            "patterns": [
-                                r"(?i)license|dl|driving|permit|rto|dmv",
-                                r"(?i)vehicle|motor|transport"
-                            ],
-                            "fields": [
-                                "license_number",
-                                "name",
-                                "date_of_birth",
-                                "address",
-                                "valid_from",
-                                "valid_until"
-                            ]
-                        }
-                    },
-                    "business_documents": {
-                        "incorporation_certificate": {
-                            "patterns": [
-                                r"(?i)incorporation|certificate\s*of\s*formation",
-                                r"(?i)articles\s*of\s*incorporation"
-                            ],
-                            "fields": [
-                                "company_name",
-                                "incorporation_date",
-                                "registration_number",
-                                "state",
-                                "registered_agent"
-                            ]
-                        },
-                        "business_license": {
-                            "patterns": [
-                                r"(?i)business\s*license|permit",
-                                r"(?i)commercial\s*license"
-                            ],
-                            "fields": [
-                                "business_name",
-                                "license_number",
-                                "issue_date",
-                                "expiry_date",
-                                "business_type"
-                            ]
-                        },
-                        "download": {
-                            "patterns": [
-                                r"(?i)download|specimen|persona",
-                                r"(?i)document|form|template"
-                            ],
-                            "fields": [
-                                "document_type",
-                                "document_number",
-                                "issue_date",
-                                "expiry_date",
-                                "holder_name",
-                                "address",
-                                "identification_number",
-                                "issuing_authority",
-                                "status",
-                                "additional_info"
-                            ]
-                        }
-                    },
-                    "financial_documents": {
-                        "bank_statement": {
-                            "patterns": [
-                                r"(?i)bank\s*statement|account\s*statement",
-                                r"(?i)transaction\s*history"
-                            ],
-                            "fields": [
-                                "account_number",
-                                "account_holder",
-                                "statement_period",
-                                "transactions"
-                            ]
-                        },
-                        "tax_return": {
-                            "patterns": [
-                                r"(?i)tax\s*return|income\s*tax\s*return",
-                                r"(?i)form\s*1040|form\s*16"
-                            ],
-                            "fields": [
-                                "tax_year",
-                                "taxpayer_name",
-                                "tax_id",
-                                "total_income",
-                                "tax_liability"
-                            ]
-                        }
-                    }
-                },
-                "field_patterns": {
-                    "dates": [
-                        r"\d{1,2}[-/]\d{1,2}[-/]\d{2,4}",
-                        r"\d{4}[-/]\d{1,2}[-/]\d{1,2}"
-                    ],
-                    "numbers": [
-                        r"\b\d{10,12}\b",
-                        r"\b[A-Z]{2}\d{7}\b"
-                    ],
-                    "names": [
-                        r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b"
-                    ]
-                }
-            }
-
-            # Create config directory if it doesn't exist
-            os.makedirs(os.path.dirname(config_path), exist_ok=True)
-
-            # Save default mappings
-            with open(config_path, 'w', encoding='utf-8') as f:
-                json.dump(default_mappings, f, indent=2)
-
-            return default_mappings
-
-        except Exception as e:
-            logger.error(f"Error loading document mappings: {str(e)}")
-            return {}
+        self.MIN_CONFIDENCE_THRESHOLD = 0.4
+        self.MIN_GENUINENESS_SCORE = 0.6
+        self.VERIFICATION_THRESHOLD = 0.5
 
     def _standardize_document_type(self, doc_type: str) -> str:
-        """Standardize document type using loaded mappings"""
+        """Standardize document type using pattern matching"""
         try:
             doc_type = doc_type.lower().strip()
 
-            # Check each category and document type
-            for category, types in self.document_mappings.get("document_types", {}).items():
-                for type_name, type_info in types.items():
-                    # Check patterns
-                    for pattern in type_info.get("patterns", []):
-                        if re.search(pattern, doc_type):
-                            return type_name
+            common_mappings = {
+                "aadhaar": "aadhaar_card",
+                "aadhaarcard": "aadhaar_card",
+                "aadhar": "aadhaar_card",
+                "aadharcard": "aadhaar_card",
+                "pan": "pan_card",
+                "pancard": "pan_card",
+                "license": "license",
+                "driving license": "license",
+                "dl": "license",
+                "passport": "passport",
+                "travel document": "passport",
+                "national passport": "passport",
+                "diplomatic passport": "passport",
+                "official passport": "passport",
+                "service passport": "passport"
+            }
 
-            # If no match found, try to extract base type
+            if doc_type in common_mappings:
+                return common_mappings[doc_type]
+
+            for standardized_type, patterns in self.compiled_patterns.items():
+                for pattern in patterns:
+                    if pattern.search(doc_type):
+                        logger.debug(f"Matched {doc_type} to {standardized_type} using pattern {pattern.pattern}")
+                        return standardized_type
+
             base_type = self._extract_base_type(doc_type)
             if base_type:
                 return base_type
 
-            # If all else fails, return the original type
             logger.warning(f"No pattern match found for document type: {doc_type}")
             return doc_type
 
@@ -918,27 +500,22 @@ class DocumentProcessor:
     def _extract_base_type(self, doc_type: str) -> Optional[str]:
         """Extract base document type from filename or text"""
         try:
-            # Remove common prefixes and suffixes
+
             doc_type = re.sub(r'(?i)sample_|template_|example_', '', doc_type)
             doc_type = re.sub(r'\.(docx|pdf|jpg|png|jpeg)$', '', doc_type)
 
-            # Remove location/country prefixes
             doc_type = re.sub(r'^(indian|florida|california|texas|new_york|uk|us|canada)_', '', doc_type)
 
-            # Remove version numbers
             doc_type = re.sub(r'_v\d+', '', doc_type)
 
-            # Remove dates
             doc_type = re.sub(r'_\d{4}(_\d{2}){0,2}', '', doc_type)
 
-            # Clean up any remaining special characters
             doc_type = re.sub(r'[^a-z0-9]', '_', doc_type.lower())
-            doc_type = re.sub(r'_+', '_', doc_type)  # Replace multiple underscores with single
+            doc_type = re.sub(r'_+', '_', doc_type)
             doc_type = doc_type.strip('_')
 
-            # Check if the cleaned type matches any of our patterns
-            for standardized_type, patterns in self.document_mappings.get("document_types", {}).items():
-                for pattern in patterns.get("patterns", []):
+            for standardized_type, patterns in self.compiled_patterns.items():
+                for pattern in patterns:
                     if pattern.search(doc_type):
                         return standardized_type
 
@@ -948,322 +525,304 @@ class DocumentProcessor:
             logger.error(f"Error extracting base type: {str(e)}")
             return None
 
-    def _get_document_specific_fields(self, doc_type: str) -> List[str]:
-        """Get document-specific fields from mappings"""
+    def add_document_pattern(self, doc_type: str, pattern: str) -> None:
+        """Add a new pattern for document type detection"""
         try:
-            # Check each category and document type
-            for category, types in self.document_mappings.get("document_types", {}).items():
-                if doc_type in types:
-                    return types[doc_type].get("fields", [])
+            if doc_type not in self.document_patterns:
+                self.document_patterns[doc_type] = []
+                self.compiled_patterns[doc_type] = []
 
-            return []
+            self.document_patterns[doc_type].append(pattern)
+            self.compiled_patterns[doc_type].append(re.compile(pattern))
+            logger.info(f"Added new pattern for {doc_type}: {pattern}")
 
         except Exception as e:
-            logger.error(f"Error getting document fields: {str(e)}")
-            return []
+            logger.error(f"Error adding document pattern: {str(e)}")
 
-    def add_document_type(self, category: str, doc_type: str, patterns: List[str], fields: List[str]) -> None:
-        """Add a new document type to the mappings"""
+    def get_document_patterns(self) -> Dict[str, List[str]]:
+        """Get current document patterns"""
+        return {
+            doc_type: [pattern.pattern for pattern in patterns]
+            for doc_type, patterns in self.compiled_patterns.items()
+        }
+
+    def _extract_text_from_docx_images(self, file_path: str) -> List[Dict[str, Any]]:
+        """Extract text from images in a DOCX file and return list of document segments"""
         try:
-            if "document_types" not in self.document_mappings:
-                self.document_mappings["document_types"] = {}
+            doc = Document(file_path)
+            document_segments = []
+            image_count = 0
 
-            if category not in self.document_mappings["document_types"]:
-                self.document_mappings["document_types"][category] = {}
-
-            self.document_mappings["document_types"][category][doc_type] = {
-                "patterns": patterns,
-                "fields": fields
-            }
-
-            # Save updated mappings
-            config_path = os.path.join(os.path.dirname(self.templates_dir), 'config', 'document_mappings.json')
-            with open(config_path, 'w', encoding='utf-8') as f:
-                json.dump(self.document_mappings, f, indent=2)
-
-            logger.info(f"Added new document type: {doc_type} to category: {category}")
-
-        except Exception as e:
-            logger.error(f"Error adding document type: {str(e)}")
-
-    def _extract_text_from_docx_images(self, file_path: str) -> List[str]:
-        """Extract text from images embedded in a DOCX file"""
-        image_texts = []
-        try:
-            # Create a temporary directory for extracted images
-            with tempfile.TemporaryDirectory() as temp_dir:
-                # Extract images from the DOCX file
-                doc = Document(file_path)
-                image_count = 0
-
-                # Process each paragraph for inline images
-                for rel in doc.part.rels.values():
-                    if "image" in rel.target_ref:
-                        image_count += 1
+            # First, extract all images from the document
+            for rel in doc.part.rels.values():
+                if "image" in rel.target_ref:
+                    image_count += 1
+                    with tempfile.TemporaryDirectory() as temp_dir:
                         image_path = os.path.join(temp_dir, f"image_{image_count}.png")
-
-                        # Save the image
-                        with open(image_path, 'wb') as f:
-                            f.write(rel.target_part.blob)
-
-                        # Extract text from the image
                         try:
-                            image = Image.open(image_path)
-                            text = pytesseract.image_to_string(image)
-                            if text.strip():
-                                image_texts.append(text.strip())
-                        except Exception as e:
-                            logger.warning(f"Error extracting text from image {image_count}: {str(e)}")
+                            # Get the image data
+                            image_data = rel.target_part.blob
 
-                logger.info(f"Extracted text from {len(image_texts)} images in DOCX file")
-                return image_texts
+                            # Save the image
+                            with open(image_path, 'wb') as f:
+                                f.write(image_data)
+
+                            # Process the image
+                            img = Image.open(image_path)
+
+                            # Try Tesseract OCR first
+                            ocr_text = pytesseract.image_to_string(img)
+
+                            # If Tesseract results are poor, use Gemini Vision
+                            if not self._is_good_ocr_result(ocr_text):
+                                logger.info(
+                                    f"Tesseract OCR yielded poor results for image {image_count}, trying Gemini Vision")
+                                response = self.text_extractor.process_with_gemini(
+                                    image_path,
+                                    "Extract all text from this document image. Return only the raw text without any formatting."
+                                )
+                                ocr_text = response.strip()
+
+                            if ocr_text.strip():
+                                document_segments.append({
+                                    "text": ocr_text.strip(),
+                                    "image_path": image_path,
+                                    "segment_index": len(document_segments),
+                                    "image_number": image_count
+                                })
+                                logger.info(f"Extracted text from image {image_count}: {len(ocr_text)} characters")
+                            else:
+                                logger.warning(f"No text could be extracted from image {image_count}")
+                        except Exception as e:
+                            logger.warning(f"Error processing image {image_count}: {str(e)}")
+                            continue
+
+            # Also check for images in paragraphs and tables
+            for para in doc.paragraphs:
+                for run in para.runs:
+                    if run._element.xpath('.//w:drawing'):
+                        image_count += 1
+                        with tempfile.TemporaryDirectory() as temp_dir:
+                            image_path = os.path.join(temp_dir, f"image_{image_count}.png")
+                            try:
+                                # Get the image data
+                                image_data = run._element.xpath('.//a:blip/@r:embed')[0]
+                                image_part = doc.part.related_parts[image_data]
+
+                                # Save the image
+                                with open(image_path, 'wb') as f:
+                                    f.write(image_part.blob)
+
+                                # Process the image
+                                img = Image.open(image_path)
+
+                                # Try Tesseract OCR first
+                                ocr_text = pytesseract.image_to_string(img)
+
+                                # If Tesseract results are poor, use Gemini Vision
+                                if not self._is_good_ocr_result(ocr_text):
+                                    logger.info(
+                                        f"Tesseract OCR yielded poor results for image {image_count}, trying Gemini Vision")
+                                    response = self.text_extractor.process_with_gemini(
+                                        image_path,
+                                        "Extract all text from this document image. Return only the raw text without any formatting."
+                                    )
+                                    ocr_text = response.strip()
+
+                                if ocr_text.strip():
+                                    document_segments.append({
+                                        "text": ocr_text.strip(),
+                                        "image_path": image_path,
+                                        "segment_index": len(document_segments),
+                                        "image_number": image_count
+                                    })
+                                    logger.info(f"Extracted text from image {image_count}: {len(ocr_text)} characters")
+                                else:
+                                    logger.warning(f"No text could be extracted from image {image_count}")
+                            except Exception as e:
+                                logger.warning(f"Error processing image {image_count}: {str(e)}")
+                                continue
+
+            if not document_segments:
+                logger.warning("No text could be extracted from images in DOCX")
+                return []
+
+            logger.info(f"Successfully extracted text from {len(document_segments)} images")
+            return document_segments
 
         except Exception as e:
-            logger.error(f"Error extracting images from DOCX: {str(e)}")
+            logger.error(f"Error extracting text from DOCX images: {str(e)}")
             return []
 
-    def _extract_fields_from_text(self, text: str, doc_type: str) -> Dict[str, Any]:
-        """Extract fields from text based on document type"""
+    def _split_into_chunks(self, text: str) -> List[str]:
+        """Split text into chunks based on document boundaries"""
         try:
-            # Get fields to extract for this document type
-            fields_to_extract = self._get_document_specific_fields(doc_type)
+            # Common document separators
+            separators = [
+                r'\n\s*\n\s*\n',  # Multiple blank lines
+                r'[-=]{3,}',  # Lines of dashes or equals
+                r'_{3,}',  # Lines of underscores
+                r'\*{3,}',  # Lines of asterisks
+                r'Page \d+',  # Page numbers
+                r'Document \d+',  # Document numbers
+                r'Copy \d+',  # Copy numbers
+                r'Original',  # Original document marker
+                r'Duplicate',  # Duplicate document marker
+                r'COPY',  # COPY marker
+                r'ORIGINAL'  # ORIGINAL marker
+            ]
 
-            # Create extraction prompt
-            prompt = f"""
-            Extract the following fields from this document text:
-            {', '.join(fields_to_extract)}
+            # Combine separators into a single pattern
+            separator_pattern = '|'.join(f'({sep})' for sep in separators)
 
-            Document Text:
-            {text}
+            # Split text into chunks
+            chunks = re.split(separator_pattern, text)
 
-            Return a JSON object with the extracted fields. For example:
-            {{
-                "field1": "value1",
-                "field2": "value2"
-            }}
+            # Filter out empty chunks and separators
+            chunks = [chunk.strip() for chunk in chunks if chunk and not any(sep in chunk for sep in separators)]
 
-            Important:
-            - Extract ALL visible information from the document
-            - If a field is not found, use null as the value
-            - For dates, use YYYY-MM-DD format
-            - For numbers, extract them exactly as shown
-            - For names and addresses, preserve the exact spelling and formatting
-            - Return ONLY the JSON object, no additional text
-            - Be thorough in extracting all possible information
-            - Look for information in headers, footers, and any visible text
-            """
+            # If no chunks were found, return the whole text as one chunk
+            if not chunks:
+                return [text]
 
-            # Process with Gemini
-            response = self.text_processor.process_text(text, prompt)
-
-            # Clean the response
-            response = response.strip()
-            if response.startswith("```json"):
-                response = response[7:]
-            if response.endswith("```"):
-                response = response[:-3]
-            response = response.strip()
-
-            try:
-                extracted_fields = json.loads(response)
-                logger.info(f"Extracted fields: {json.dumps(extracted_fields, indent=2)}")
-            except json.JSONDecodeError as e:
-                logger.error(f"Error parsing extracted fields: {str(e)}")
-                return {}
-
-            return extracted_fields
+            return chunks
 
         except Exception as e:
-            logger.error(f"Error extracting fields: {str(e)}")
-            return {}
+            logger.error(f"Error splitting text into chunks: {str(e)}")
+            return [text]
+
+    def _process_multiple_documents(self, text: str, source_file: str, min_confidence: float) -> List[Dict[str, Any]]:
+        """Process text that may contain multiple documents"""
+        try:
+            results = []
+
+            # Split text into potential document chunks
+            chunks = self._split_into_chunks(text)
+            logger.info(f"Split text into {len(chunks)} potential document chunks")
+
+            for chunk_index, chunk in enumerate(chunks):
+                if not chunk.strip():
+                    continue
+
+                logger.info(f"Processing chunk {chunk_index + 1} of {len(chunks)}")
+
+                # Process each chunk as a separate document
+                result = self._process_text_content(chunk, source_file, min_confidence)
+
+                if result:
+                    # Add chunk information to the result
+                    result["chunk_index"] = chunk_index + 1
+                    result["total_chunks"] = len(chunks)
+                    results.append(result)
+
+            return results
+
+        except Exception as e:
+            logger.error(f"Error processing multiple documents: {str(e)}")
+            return []
 
     def process_file(self, file_path: str, min_confidence: float = 0.0) -> List[Dict[str, Any]]:
         """Process a file that may contain multiple documents"""
-        try:
-            if file_path.lower().endswith('.docx'):
-                return self._process_docx(file_path, min_confidence)
-            else:
-                # First, try to match the document against templates
-                try:
-                    template_match = self.template_matcher.match_document(file_path)
-                    if not template_match:
-                        return [{
-                            "status": "rejected",
-                            "document_type": "unknown",
-                            "source_file": file_path,
-                            "rejection_reason": "No template match found"
-                        }]
-
-                    # Use the matched document type even if confidence is low
-                    doc_type = template_match['document_type']
-                    logger.info(f"Document matched template: {doc_type} with confidence {template_match['confidence']}")
-
-                    # Extract text from the document
-                    input_text = self.text_extractor.extract_text(file_path)
-                    if not input_text.strip():
-                        logger.error("No text could be extracted from the document")
-                        return [{
-                            "status": "rejected",
-                            "document_type": doc_type,
-                            "source_file": file_path,
-                            "rejection_reason": "No text could be extracted"
-                        }]
-
-                    # Extract fields using learned patterns
-                    extracted_fields = self._extract_fields_from_text(input_text, doc_type)
-
-                    # Merge template-matched fields with extracted fields
-                    if template_match.get('matched_fields'):
-                        extracted_fields.update(template_match['matched_fields'])
-
-                    # Verify document authenticity with lower threshold
-                    verification_result = self.verify_document(extracted_fields, doc_type)
-
-                    # Return result even if verification fails, but mark it appropriately
-                    return [{
-                        "extracted_data": extracted_fields,
-                        "status": "success" if verification_result["is_genuine"] else "warning",
-                        "confidence": template_match['confidence'],
-                        "document_type": doc_type,
-                        "source_file": file_path,
-                        "validation_level": "lenient",
-                        "verification_result": verification_result,
-                        "template_match": {
-                            "confidence": template_match['confidence'],
-                            "matched_fields": template_match.get('matched_fields', {}),
-                            "additional_info": template_match.get('additional_info')
-                        }
-                    }]
-
-                except Exception as e:
-                    logger.error(f"Error matching template: {str(e)}")
-                    return [{
-                        "status": "rejected",
-                        "document_type": "unknown",
-                        "source_file": file_path,
-                        "rejection_reason": f"Error matching template: {str(e)}"
-                    }]
-
-        except Exception as e:
-            logger.exception(f"Error processing file {file_path}")
-            return [{
-                "status": "error",
-                "document_type": "unknown",
-                "source_file": file_path,
-                "rejection_reason": f"Error processing document: {str(e)}"
-            }]
+        if file_path.lower().endswith('.pdf'):
+            return self._process_pdf(file_path, min_confidence)
+        elif file_path.lower().endswith('.docx'):
+            return self._process_docx(file_path, min_confidence)
+        else:
+            result = self._process_single_image(file_path, min_confidence)
+            return [result] if result else []
 
     def _process_docx(self, file_path: str, min_confidence: float) -> List[Dict[str, Any]]:
         """Process a DOCX file that may contain multiple documents"""
         results = []
+        processed_images = set()  # Track processed images to avoid duplicates
+
         try:
-            # Extract text from paragraphs and tables
+            # First, try to extract and process images
+            logger.info("Attempting to extract and process images from DOCX")
+            document_segments = self._extract_text_from_docx_images(file_path)
+
+            if document_segments:
+                logger.info(f"Found {len(document_segments)} images in the document")
+                for segment in document_segments:
+                    # Skip if we've already processed this image
+                    if segment["image_path"] in processed_images:
+                        continue
+
+                    processed_images.add(segment["image_path"])
+
+                    if segment["text"].strip():
+                        logger.info(f"Processing image {segment['image_number']}")
+                        # Try to process as multiple documents first
+                        multi_doc_results = self._process_multiple_documents(segment["text"], file_path, min_confidence)
+                        if multi_doc_results:
+                            for result in multi_doc_results:
+                                result["image_number"] = segment["image_number"]
+                                result["processing_method"] = "ocr"
+                            results.extend(multi_doc_results)
+                        else:
+                            # Process as single document if multiple document detection failed
+                            result = self._process_text_content(segment["text"], file_path, min_confidence)
+                            if result:
+                                result["image_number"] = segment["image_number"]
+                                result["processing_method"] = "ocr"
+                                results.append(result)
+
+            # Then process the document text
             doc = Document(file_path)
             text_content = []
-            
+
             # Extract text from paragraphs
             for para in doc.paragraphs:
                 if para.text.strip():
                     text_content.append(para.text.strip())
-            
+
             # Extract text from tables
             for table in doc.tables:
                 for row in table.rows:
                     for cell in row.cells:
                         if cell.text.strip():
                             text_content.append(cell.text.strip())
-            
+
             # Combine all text
             text = '\n'.join(text_content)
-            
-            # Extract images from the document
-            image_texts = self._extract_text_from_docx_images(file_path)
-            
-            # Combine text from document and images
-            all_text = text
-            if image_texts:
-                all_text += '\n' + '\n'.join(str(img_text) for img_text in image_texts if img_text)
-            
-            if not all_text.strip():
-                logger.warning(f"No text content found in DOCX file: {file_path}")
+
+            if text.strip():
+                logger.info(f"Processing text content from DOCX: {len(text)} characters")
+
+                # Try to process as multiple documents first
+                multi_doc_results = self._process_multiple_documents(text, file_path, min_confidence)
+                if multi_doc_results:
+                    for result in multi_doc_results:
+                        result["processing_method"] = "direct_text"
+                    results.extend(multi_doc_results)
+                else:
+                    # If multiple document processing didn't yield results, process as single document
+                    result = self._process_text_content(text, file_path, min_confidence)
+                    if result:
+                        result["processing_method"] = "direct_text"
+                        results.append(result)
+
+            if not results:
+                logger.warning(f"No valid content found in DOCX file: {file_path}")
                 return [{
                     "status": "rejected",
                     "document_type": "unknown",
                     "source_file": file_path,
-                    "rejection_reason": "No text content found in document"
+                    "rejection_reason": "No valid content found in document"
                 }]
-            
-            # Try to match the combined text against templates
-            try:
-                # Create a temporary file with the extracted text for template matching
-                with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as temp_file:
-                    temp_file.write(all_text)
-                    temp_file_path = temp_file.name
 
-                template_match = self.template_matcher.match_document(temp_file_path)
-                
-                # Clean up the temporary file
-                try:
-                    os.unlink(temp_file_path)
-                except Exception as e:
-                    logger.warning(f"Error deleting temporary file: {str(e)}")
+            # Consolidate results to remove duplicates
+            consolidated_results = self._consolidate_results(results)
 
-                if not template_match or template_match['confidence'] < self.MIN_CONFIDENCE_THRESHOLD:
-                    return [{
-                        "status": "rejected",
-                        "document_type": "unknown",
-                        "source_file": file_path,
-                        "rejection_reason": f"Document does not match any known template (confidence: {template_match['confidence'] if template_match else 0})"
-                    }]
-                
-                logger.info(f"Document matched template: {template_match['document_type']} with confidence {template_match['confidence']}")
-            except Exception as e:
-                logger.error(f"Error matching template: {str(e)}")
-                return [{
-                    "status": "rejected",
-                    "document_type": "unknown",
-                    "source_file": file_path,
-                    "rejection_reason": f"Error matching template: {str(e)}"
-                }]
-            
-            # Extract fields using learned patterns
-            extracted_fields = self.document_learner.extract_fields(
-                all_text,
-                template_match['document_type']
-            )
-            
-            # Merge template-matched fields with extracted fields
-            if template_match.get('matched_fields'):
-                extracted_fields.update(template_match['matched_fields'])
-            
-            # Verify document authenticity
-            verification_result = self.verify_document(extracted_fields, template_match['document_type'])
-            
-            if not verification_result["is_genuine"]:
-                return [{
-                    "status": "rejected",
-                    "document_type": template_match['document_type'],
-                    "source_file": file_path,
-                    "rejection_reason": verification_result["rejection_reason"],
-                    "verification_result": verification_result
-                }]
-            
-            # Return successful result
-            return [{
-                "extracted_data": extracted_fields,
-                "status": "success",
-                "confidence": template_match['confidence'],
-                "document_type": template_match['document_type'],
-                "source_file": file_path,
-                "validation_level": "strict",
-                "verification_result": verification_result,
-                "template_match": {
-                    "confidence": template_match['confidence'],
-                    "matched_fields": template_match.get('matched_fields', {}),
-                    "additional_info": template_match.get('additional_info')
-                }
-            }]
-            
+            # Log the results
+            logger.info(f"Successfully processed {len(consolidated_results)} unique documents from DOCX file")
+            for result in consolidated_results:
+                logger.info(f"Document type: {result.get('document_type')}, "
+                            f"Processing method: {result.get('processing_method')}, "
+                            f"Image number: {result.get('image_number', 'N/A')}")
+
+            return consolidated_results
+
         except Exception as e:
             logger.error(f"Error processing DOCX file: {str(e)}")
             return [{
@@ -1273,24 +832,431 @@ class DocumentProcessor:
                 "rejection_reason": f"Error processing document: {str(e)}"
             }]
 
+    def _consolidate_results(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Consolidate results to remove duplicates and combine related documents"""
+        try:
+            consolidated = []
+            seen_documents = set()
+
+            for result in results:
+                if result.get("status") != "success":
+                    continue
+
+                # Create a unique identifier for the document
+                doc_type = result.get("document_type", "unknown")
+                extracted_data = result.get("extracted_data", {})
+
+                # Create a unique key based on document type and key fields
+                if doc_type == "aadhaar_card":
+                    key = f"aadhaar_{extracted_data.get('Aadhaar Number', '')}"
+                elif doc_type == "license":
+                    key = f"license_{extracted_data.get('Name', '')}_{extracted_data.get('Date of Birth', '')}"
+                else:
+                    key = f"{doc_type}_{json.dumps(extracted_data)}"
+
+                if key not in seen_documents:
+                    seen_documents.add(key)
+                    consolidated.append(result)
+
+            return consolidated
+
+        except Exception as e:
+            logger.error(f"Error consolidating results: {str(e)}")
+            return results
+
+    def _process_text_content(self, text: str, source_file: str, min_confidence: float) -> Optional[Dict[str, Any]]:
+        """Process text content directly without creating temporary files"""
+        try:
+
+            detection_prompt = f"""
+                        Analyze this text and determine what type of document it is (license, aadhaar_card, pan_card, or passport).
+                        Look for these indicators:
+                        - Aadhaar: "Aadhaar", "UIDAI", "आधार", "Unique Identification"
+                        - PAN: "PAN", "Permanent Account Number", "Income Tax"
+                        - License: "License", "Driving License", "DL", "RTO"
+                        - Passport: "Passport", "Passport Number", "Nationality"
+
+                        Text:
+                        {text}
+
+                        Return a JSON response with:
+                        {{
+                            "document_type": "detected_type",
+                            "confidence": 0.0-1.0,
+                            "reasoning": "explanation"
+                        }}
+
+                        Important:
+                        - Only return document_type as one of: "license", "aadhaar_card", "pan_card", "passport"
+                        - If you cannot confidently determine the type, return "unknown"
+                        - Be strict in your confidence scoring
+                        - Consider a document type only if you see clear indicators
+                        """
+
+            response = self.text_processor.process_text(text, detection_prompt)
+            detection_result = json.loads(response.strip().replace("```json", "").replace("```", "").strip())
+
+            doc_type = detection_result.get("document_type", "").lower()
+            confidence = detection_result.get("confidence", 0.0)
+
+            doc_type = self._standardize_document_type(doc_type)
+
+            if doc_type == "unknown" or confidence < min_confidence:
+                logger.warning(f"Could not confidently determine document type (confidence: {confidence})")
+                return {
+                    "status": "rejected",
+                    "document_type": "unknown",
+                    "source_file": source_file,
+                    "rejection_reason": f"Document type could not be determined with sufficient confidence (confidence: {confidence})",
+                    "confidence": confidence
+                }
+
+            logger.info(f"Detected document type: {doc_type} with confidence {confidence}")
+
+            try:
+                extractor = DocumentExtractorFactory.get_extractor(doc_type, self.api_key)
+            except ValueError as e:
+                logger.error(f"Error getting extractor: {str(e)}")
+                return {
+                    "status": "rejected",
+                    "document_type": doc_type,
+                    "source_file": source_file,
+                    "rejection_reason": f"No extractor available for document type: {doc_type}",
+                    "confidence": confidence
+                }
+
+            extraction_prompt = f"""
+                        You are a document analysis expert. Extract all relevant information from this {doc_type} document.
+
+                        Document Text:
+                        {text}
+
+                        For a {doc_type}, look for and extract these specific fields:
+                        {self._get_document_specific_fields(doc_type)}
+
+                        Important:
+                        1. Extract ALL visible information from the document
+                        2. If a field is not found, use "None" as the value
+                        3. For dates, use YYYY-MM-DD format
+                        4. For numbers, extract them exactly as shown
+                        5. For names and addresses, preserve the exact spelling and formatting
+
+                        Return the extracted information in JSON format with this structure:
+                        {{
+                            "data": {{
+                                // All extracted fields
+                            }},
+                            "confidence": 0.0-1.0,
+                            "additional_info": "Any additional relevant information"
+                        }}
+                        """
+
+            response = self.text_processor.process_text(text, extraction_prompt)
+            extracted_data = json.loads(response.strip().replace("```json", "").replace("```", "").strip())
+            logger.info(f"Extracted data: {json.dumps(extracted_data, indent=2)}")
+
+            verification_result = self.verify_document(extracted_data, doc_type)
+
+            if not verification_result["is_genuine"]:
+                rejection_reason = verification_result.get("rejection_reason",
+                                                           "Document failed authenticity verification")
+                logger.warning(f"Document rejected - Not genuine: {rejection_reason}")
+                return {
+                    "status": "rejected",
+                    "document_type": doc_type,
+                    "source_file": source_file,
+                    "rejection_reason": rejection_reason,
+                    "verification_result": verification_result
+                }
+
+            if extractor.validate_fields(extracted_data):
+                flattened_data = flatten_json(extracted_data)
+                return {
+                    "extracted_data": flattened_data,
+                    "status": "success",
+                    "confidence": confidence,
+                    "document_type": doc_type,
+                    "source_file": source_file,
+                    "validation_level": "strict",
+                    "verification_result": verification_result
+                }
+            else:
+                logger.warning(f"Validation failed for {source_file}")
+                return {
+                    "status": "rejected",
+                    "document_type": doc_type,
+                    "source_file": source_file,
+                    "rejection_reason": "Document failed validation",
+                    "verification_result": verification_result
+                }
+
+        except Exception as e:
+            logger.exception(f"Error processing text content: {str(e)}")
+            return {
+                "status": "error",
+                "document_type": "unknown",
+                "source_file": source_file,
+                "rejection_reason": f"Error processing document: {str(e)}"
+            }
+
+    def _process_pdf(self, pdf_path: str, min_confidence: float) -> List[Dict[str, Any]]:
+        """Process a PDF file that may contain multiple documents"""
+        results = []
+        pdf_document = fitz.open(pdf_path)
+
+        try:
+            # First try to process the entire PDF as one document
+            all_text = ""
+            for page_num in range(pdf_document.page_count):
+                page = pdf_document[page_num]
+                text = page.get_text()
+                if text.strip():
+                    all_text += text + "\n\n"
+
+            if all_text.strip():
+                # Try to process as multiple documents first
+                multi_doc_results = self._process_multiple_documents(all_text, pdf_path, min_confidence)
+                if multi_doc_results:
+                    results.extend(multi_doc_results)
+                    return results
+
+            # If multiple document processing didn't yield results, process page by page
+            for page_num in range(pdf_document.page_count):
+                logger.info(f"Processing page {page_num + 1} of {pdf_document.page_count}")
+
+                page = pdf_document[page_num]
+                text = page.get_text()
+
+                needs_ocr = self._needs_ocr(text, page)
+
+                if needs_ocr:
+                    logger.info(f"Page {page_num + 1} requires OCR processing")
+                    images = page.get_images(full=True)
+
+                    if not images:
+                        logger.warning(f"No images found on page {page_num + 1} for OCR")
+                        continue
+
+                    for img_index, img_info in enumerate(images):
+                        with tempfile.TemporaryDirectory() as temp_dir:
+                            img_data = pdf_document.extract_image(img_info[0])
+                            temp_image_path = os.path.join(temp_dir, f"page_{page_num}_img_{img_index}.png")
+
+                            with open(temp_image_path, "wb") as img_file:
+                                img_file.write(img_data["image"])
+
+                            ocr_text = self._perform_ocr(temp_image_path)
+                            if ocr_text:
+                                # Try to process OCR text as multiple documents
+                                multi_doc_results = self._process_multiple_documents(ocr_text, pdf_path, min_confidence)
+                                if multi_doc_results:
+                                    for result in multi_doc_results:
+                                        result["page_number"] = page_num + 1
+                                        result["image_index"] = img_index + 1
+                                        result["processing_method"] = "ocr"
+                                    results.extend(multi_doc_results)
+                                else:
+                                    # Process as single document if multiple document detection failed
+                                    result = self._process_text_content(ocr_text, pdf_path, min_confidence)
+                                    if result:
+                                        result["page_number"] = page_num + 1
+                                        result["image_index"] = img_index + 1
+                                        result["processing_method"] = "ocr"
+                                        results.append(result)
+                else:
+                    if text.strip():
+                        # Try to process text as multiple documents
+                        multi_doc_results = self._process_multiple_documents(text, pdf_path, min_confidence)
+                        if multi_doc_results:
+                            for result in multi_doc_results:
+                                result["page_number"] = page_num + 1
+                                result["processing_method"] = "direct_text"
+                            results.extend(multi_doc_results)
+                        else:
+                            # Process as single document if multiple document detection failed
+                            result = self._process_text_content(text, pdf_path, min_confidence)
+                            if result:
+                                result["page_number"] = page_num + 1
+                                result["processing_method"] = "direct_text"
+                                results.append(result)
+
+            return results
+        finally:
+            pdf_document.close()
+
+    def _needs_ocr(self, text: str, page) -> bool:
+        """Determine if OCR is needed for the page"""
+        try:
+
+            if not text.strip():
+                return True
+
+            if self._is_character_by_character(text):
+                return True
+
+            images = page.get_images(full=True)
+            if images:
+
+                if not self._has_meaningful_content(text):
+                    return True
+
+            if self._has_document_indicators(page):
+                return True
+
+            return False
+
+        except Exception as e:
+            logger.error(f"Error determining OCR need: {str(e)}")
+            return True
+
+    def _is_character_by_character(self, text: str) -> bool:
+        """Check if text appears to be extracted character by character"""
+        try:
+
+            patterns = [
+                r'[A-Z]\s+[A-Z]\s+[A-Z]',
+                r'[a-z]\s+[a-z]\s+[a-z]',
+                r'[0-9]\s+[0-9]\s+[0-9]',
+                r'[A-Za-z]\s+[A-Za-z]\s+[A-Za-z]'
+            ]
+
+            for pattern in patterns:
+                if re.search(pattern, text):
+                    return True
+
+            if len(text) > 0:
+                space_ratio = text.count(' ') / len(text)
+                if space_ratio > 0.3:
+                    return True
+
+            return False
+
+        except Exception as e:
+            logger.error(f"Error checking character-by-character extraction: {str(e)}")
+            return False
+
+    def _has_meaningful_content(self, text: str) -> bool:
+        """Check if text contains meaningful content"""
+        try:
+
+            indicators = [
+                r'[A-Z]{2,}',
+                r'\d{4,}',
+                r'[A-Za-z]+\s+[A-Za-z]+',
+                r'[A-Za-z]+\s+\d+',
+                r'\d+\s+[A-Za-z]+'
+            ]
+
+            indicator_count = 0
+            for pattern in indicators:
+                if re.search(pattern, text):
+                    indicator_count += 1
+
+            return indicator_count >= 2
+
+        except Exception as e:
+            logger.error(f"Error checking meaningful content: {str(e)}")
+            return False
+
+    def _has_document_indicators(self, page) -> bool:
+        """Check if page has indicators of being a document that might need OCR"""
+        try:
+
+            images = page.get_images(full=True)
+            if not images:
+                return False
+
+            blocks = page.get_text("blocks")
+            if not blocks:
+                return True
+
+            for block in blocks:
+
+                if block[4].strip():
+                    if any(indicator in block[4].lower() for indicator in [
+                        "name", "date", "address", "signature", "photo",
+                        "passport", "license", "id", "number", "issued"
+                    ]):
+                        return True
+
+            return False
+
+        except Exception as e:
+            logger.error(f"Error checking document indicators: {str(e)}")
+            return True
+
+    def _perform_ocr(self, image_path: str) -> str:
+        """Perform OCR on an image"""
+        try:
+
+            img = Image.open(image_path)
+            ocr_text = pytesseract.image_to_string(img)
+
+            if not self._is_good_ocr_result(ocr_text):
+                logger.info("Tesseract OCR yielded poor results, trying Gemini Vision")
+                response = self.text_extractor.process_with_gemini(
+                    image_path,
+                    "Extract all text from this document image. Return only the raw text without any formatting."
+                )
+                ocr_text = response.strip()
+
+            return ocr_text
+
+        except Exception as e:
+            logger.error(f"Error performing OCR: {str(e)}")
+            return ""
+
+    def _is_good_ocr_result(self, text: str) -> bool:
+        """Check if OCR result is of good quality"""
+        try:
+            if not text.strip():
+                return False
+
+            if len(text.strip()) < 10:
+                return False
+
+            if not self._has_meaningful_content(text):
+                return False
+
+            error_patterns = [
+                r'[|]{2,}',
+                r'[l1]{3,}',
+                r'[o0]{3,}',
+                r'[rn]{3,}',
+                r'\s{3,}'
+            ]
+
+            for pattern in error_patterns:
+                if re.search(pattern, text):
+                    return False
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error checking OCR result quality: {str(e)}")
+            return False
+
     def verify_document(self, extracted_data: Dict[str, Any], doc_type: str) -> Dict[str, Any]:
         """Verify document authenticity and data validity"""
         try:
-            # Create a comprehensive verification prompt
+
             verification_prompt = f"""
-            You are a document verification expert. Analyze this document text and determine if it is genuine.
+            You are a document verification expert specializing in {doc_type} verification. 
+            Analyze this document data and determine if it is genuine.
             Provide a detailed verification report with specific checks and findings.
 
-            Document Text:
+            Document Data:
             {json.dumps(extracted_data, indent=2)}
+
+            Document Type: {doc_type}
 
             Perform the following checks:
 
             1. Document Authenticity:
+               - Verify presence of required fields for {doc_type}
                - Check for official text and formatting
-               - Verify presence of official logos and seals
                - Validate document structure and layout
-               - Check for security features
+               - Check for security features specific to {doc_type}
                - Verify document quality and printing standards
                - Look for official headers and footers
                - Check for any official stamps or marks
@@ -1304,14 +1270,14 @@ class DocumentProcessor:
                - Verify any security numbers or codes
                - Look for any anti-counterfeit measures
 
-            3. Red Flag Detection:
-               - Look for signs of tampering
-               - Check for inconsistencies in formatting
-               - Verify document quality
-               - Look for any suspicious elements
-               - Check for any signs of forgery
-               - Look for any anomalies in text
-               - Check for any signs of photocopying
+            3. Data Validation:
+               - Verify all identification numbers and their formats
+               - Check date formats and their logical consistency
+               - Validate name and address formatting
+               - Look for any data inconsistencies
+               - Verify field relationships and dependencies
+               - Check for logical data patterns
+               - Validate any reference numbers
 
             4. Document Quality:
                - Check printing quality
@@ -1330,41 +1296,59 @@ class DocumentProcessor:
                 "verification_checks": {{
                     "authenticity": {{
                         "passed": true/false,
-                        "details": "explanation"
+                        "details": "explanation",
+                        "confidence": 0.0-1.0
                     }},
                     "security_features": {{
                         "passed": true/false,
-                        "details": "explanation"
+                        "details": "explanation",
+                        "confidence": 0.0-1.0
                     }},
-                    "red_flags": {{
+                    "data_validation": {{
                         "passed": true/false,
-                        "details": "explanation"
+                        "details": "explanation",
+                        "confidence": 0.0-1.0
                     }},
                     "quality": {{
                         "passed": true/false,
-                        "details": "explanation"
+                        "details": "explanation",
+                        "confidence": 0.0-1.0
                     }}
                 }},
                 "security_features_found": ["list of security features"],
-                "verification_summary": "Overall verification summary"
+                "verification_summary": "Overall verification summary",
+                "recommendations": ["list of recommendations for improvement"]
             }}
 
             Important:
-            - Be thorough in your analysis
-            - Consider all aspects of document authenticity
-            - Provide detailed explanations for your decisions
-            - Look for any signs of forgery or tampering
-            - Consider document-specific security features
-            - Check for any inconsistencies or anomalies
-            - Pay attention to document quality and formatting
+            - Be thorough but fair in your analysis
+            - Consider document-specific requirements for {doc_type}
+            - Account for variations in official document formats
+            - Consider both digital and physical security features
+            - Look for logical consistency in the data
+            - Consider the document's intended use
+            - Be lenient with minor formatting variations
+            - Focus on key security features and data validity
+            - Consider official document standards
+            - Account for regional variations in document formats
             """
 
-            # Process with Gemini
             response = self.text_processor.process_text(json.dumps(extracted_data), verification_prompt)
             verification_result = json.loads(response.strip().replace("```json", "").replace("```", "").strip())
 
-            # Log verification results
-            logger.info(f"Document genuineness verification results: {json.dumps(verification_result, indent=2)}")
+            checks = verification_result.get("verification_checks", {})
+            confidence_scores = [
+                checks.get("authenticity", {}).get("confidence", 0),
+                checks.get("security_features", {}).get("confidence", 0),
+                checks.get("data_validation", {}).get("confidence", 0),
+                checks.get("quality", {}).get("confidence", 0)
+            ]
+            overall_confidence = sum(confidence_scores) / len(confidence_scores) if confidence_scores else 0
+
+            verification_result["confidence_score"] = overall_confidence
+            verification_result["is_genuine"] = overall_confidence >= self.VERIFICATION_THRESHOLD
+
+            logger.info(f"Document verification results: {json.dumps(verification_result, indent=2)}")
 
             return verification_result
 
@@ -1375,13 +1359,15 @@ class DocumentProcessor:
                 "confidence_score": 0.0,
                 "rejection_reason": f"Error during verification: {str(e)}",
                 "verification_checks": {
-                    "authenticity": {"passed": False, "details": f"Error during verification: {str(e)}"},
-                    "security_features": {"passed": False, "details": "Verification failed"},
-                    "red_flags": {"passed": False, "details": "Verification failed"},
-                    "quality": {"passed": False, "details": "Verification failed"}
+                    "authenticity": {"passed": False, "details": f"Error during verification: {str(e)}",
+                                     "confidence": 0.0},
+                    "security_features": {"passed": False, "details": "Verification failed", "confidence": 0.0},
+                    "data_validation": {"passed": False, "details": "Verification failed", "confidence": 0.0},
+                    "quality": {"passed": False, "details": "Verification failed", "confidence": 0.0}
                 },
                 "security_features_found": [],
-                "verification_summary": f"Document verification failed due to error: {str(e)}"
+                "verification_summary": f"Document verification failed due to error: {str(e)}",
+                "recommendations": ["Verification process failed due to technical error"]
             }
 
     def _validate_with_leniency(self, extracted_data: Dict[str, Any], doc_type: str) -> bool:
@@ -1389,153 +1375,295 @@ class DocumentProcessor:
         try:
             data = extracted_data.get("data", {})
 
-            # Check if we have at least some basic information
             if not data:
                 return False
 
-            # Document type specific lenient validation
             if doc_type == "license":
-                # For license, require at least one of these fields
+
                 required_fields = ["license_number", "name", "date_of_birth"]
                 return any(field in data for field in required_fields)
             elif doc_type == "aadhaar_card":
-                # For Aadhaar, require at least one of these fields
+
                 required_fields = ["aadhaar_number", "name", "date_of_birth"]
                 return any(field in data for field in required_fields)
             elif doc_type == "pan_card":
-                # For PAN, require at least one of these fields
+
                 required_fields = ["pan_number", "name", "date_of_birth"]
                 return any(field in data for field in required_fields)
             else:
-                # For other document types, require at least one field
+
                 return len(data) > 0
 
         except Exception as e:
             logger.error(f"Error in lenient validation: {str(e)}")
             return False
 
-    def _verify_document_genuineness(self, text: str) -> Dict[str, Any]:
-        """Verify if the document is genuine based on text content"""
+    def _get_document_specific_fields(self, doc_type: str) -> str:
+        """Get document-specific fields to extract"""
+        fields = {
+            "license": """
+                        - License Number (look for DL number, license number, etc.)
+                        - Name (full name of the license holder)
+                        - Date of Birth (DOB, birth date)
+                        - Address (current address)
+                        - Valid From (issue date, date of issue)
+                        - Valid Until (expiry date, valid till)
+                        - Vehicle Categories (classes of vehicles allowed)
+                        - Issuing Authority (RTO, DMV, etc.)
+                        """,
+            "aadhaar_card": """
+                        - Aadhaar Number (12-digit number)
+                        - Name (full name)
+                        - Gender
+                        - Date of Birth
+                        - Address
+                        - Father's Name
+                        - Photo
+                        """,
+            "pan_card": """
+                        - PAN Number (10-character alphanumeric)
+                        - Name
+                        - Father's Name
+                        - Date of Birth
+                        - Photo
+                        """,
+            "passport": """
+                        - Passport Number (look for P, A, C, S prefixes)
+                        - Type/Category (Regular, Diplomatic, Official, Service)
+                        - Country Code (3-letter code)
+                        - Surname/Last Name
+                        - Given Names
+                        - Nationality
+                        - Date of Birth
+                        - Place of Birth
+                        - Gender
+                        - Date of Issue
+                        - Date of Expiry
+                        - Authority/Issuing Country
+                        - Personal Number (if present)
+                        - Machine Readable Zone (MRZ)
+                        - Photo
+                        - Signature
+                        - Security Features
+                        """
+        }
+        return fields.get(doc_type, "Extract all visible text and information from the document.")
+
+    def _verify_document_genuineness(self, text: str, doc_type: str) -> Dict[str, Any]:
+        """Verify if the document is genuine before extraction"""
+        verification_result = {
+            "is_genuine": False,
+            "confidence_score": 0.0,
+            "rejection_reason": "",
+            "verification_checks": [],
+            "security_features_found": []
+        }
+
         try:
-            # Create a comprehensive verification prompt
+
             verification_prompt = f"""
-            You are a document verification expert. Analyze this document text and determine if it is genuine.
-            Provide a detailed verification report with specific checks and findings.
+                        You are an expert document verification AI. Your task is to determine if this document is genuine BEFORE any data extraction.
 
-            Document Text:
-            {text}
+                        Document Text:
+                        {text}
 
-            Perform the following checks:
+                        Perform a thorough genuineness check:
 
-            1. Document Authenticity:
-               - Check for official text and formatting
-               - Verify presence of official logos and seals
-               - Validate document structure and layout
-               - Check for security features
-               - Verify document quality and printing standards
-               - Look for official headers and footers
-               - Check for any official stamps or marks
+                        1. Document Authenticity:
+                           - Verify if this is a genuine official document
+                           - Check for official government/issuing authority text and formatting
+                           - Look for security features and anti-counterfeit measures
+                           - Validate document structure and layout
+                           - Check for official logos and seals
 
-            2. Security Feature Analysis:
-               - Look for official seals and stamps
-               - Check for watermarks or holograms
-               - Verify presence of security patterns
-               - Look for QR codes or barcodes
-               - Check for any digital signatures
-               - Verify any security numbers or codes
-               - Look for any anti-counterfeit measures
+                        2. Security Feature Analysis:
+                           - Check for official seals, watermarks, or holograms
+                           - Look for security patterns or microtext
+                           - Verify presence of QR codes or barcodes
+                           - Check for official government/issuing authority text
+                           - Look for security threads or special paper
 
-            3. Red Flag Detection:
-               - Look for signs of tampering
-               - Check for inconsistencies in formatting
-               - Verify document quality
-               - Look for any suspicious elements
-               - Check for any signs of forgery
-               - Look for any anomalies in text
-               - Check for any signs of photocopying
+                        3. Red Flag Detection:
+                           - Look for signs of forgery or tampering
+                           - Check for missing security features
+                           - Identify suspicious patterns
+                           - Look for inconsistencies in formatting
+                           - Check for sample/template indicators
+                           - Look for "not for official use" or similar disclaimers
 
-            4. Document Quality:
-               - Check printing quality
-               - Verify text alignment
-               - Check for any smudges or marks
-               - Verify color consistency
-               - Check for any signs of poor quality
-               - Verify professional formatting
-               - Check for any signs of manipulation
+                        4. Document Quality:
+                           - Check for professional printing quality
+                           - Verify proper alignment and formatting
+                           - Look for official document design elements
+                           - Check for proper spacing and typography
 
-            Return a JSON response with:
-            {{
-                "is_genuine": true/false,
-                "confidence_score": 0.0-1.0,
-                "rejection_reason": "reason if not genuine",
-                "verification_checks": {{
-                    "authenticity": {{
-                        "passed": true/false,
-                        "details": "explanation"
-                    }},
-                    "security_features": {{
-                        "passed": true/false,
-                        "details": "explanation"
-                    }},
-                    "red_flags": {{
-                        "passed": true/false,
-                        "details": "explanation"
-                    }},
-                    "quality": {{
-                        "passed": true/false,
-                        "details": "explanation"
-                    }}
-                }},
-                "security_features_found": ["list of security features"],
-                "verification_summary": "Overall verification summary"
-            }}
+                        Return a JSON response with:
+                        {{
+                            "is_genuine": true/false,
+                            "confidence_score": 0.0-1.0,
+                            "rejection_reason": "detailed explanation if not genuine",
+                            "verification_checks": [
+                                {{
+                                    "check_type": "type of check",
+                                    "status": "passed/failed",
+                                    "details": "explanation"
+                                }}
+                            ],
+                            "security_features_found": ["list of found features"],
+                            "verification_summary": "detailed explanation"
+                        }}
 
-            Important:
-            - Be thorough in your analysis
-            - Consider all aspects of document authenticity
-            - Provide detailed explanations for your decisions
-            - Look for any signs of forgery or tampering
-            - Consider document-specific security features
-            - Check for any inconsistencies or anomalies
-            - Pay attention to document quality and formatting
-            """
+                        Important:
+                        - Be extremely thorough in your analysis
+                        - Reject any document that shows signs of being:
+                          * A sample or template
+                          * A photocopy or scan
+                          * A digital copy
+                          * A test document
+                          * A demonstration document
+                          * A training document
+                        - Look for any signs of forgery or tampering
+                        - Provide detailed explanations for your decisions
+                        - If in doubt, reject the document
+                        - Only accept documents that are clearly genuine official documents
+                        """
 
-            # Process with Gemini
             response = self.text_processor.process_text(text, verification_prompt)
-            verification_result = json.loads(response.strip().replace("```json", "").replace("```", "").strip())
+            verification_data = json.loads(response.strip().replace("```json", "").replace("```", "").strip())
 
-            # Log verification results
-            logger.info(f"Document genuineness verification results: {json.dumps(verification_result, indent=2)}")
+            verification_result["is_genuine"] = verification_data.get("is_genuine", False)
+            verification_result["confidence_score"] = verification_data.get("confidence_score", 0.0)
+            verification_result["rejection_reason"] = verification_data.get("rejection_reason", "")
+            verification_result["verification_checks"] = verification_data.get("verification_checks", [])
+            verification_result["security_features_found"] = verification_data.get("security_features_found", [])
+
+            non_genuine_indicators = [
+                "sample", "template", "example", "dummy", "test",
+                "not for official use", "for demonstration",
+                "training", "practice", "mock",
+                "photocopy", "scan", "digital copy",
+                "this is a", "this document is",
+                "for testing", "for practice",
+                "do not use", "invalid",
+                "unofficial", "non-official"
+            ]
+
+            if any(indicator in text.lower() for indicator in non_genuine_indicators):
+                verification_result["is_genuine"] = False
+                verification_result["rejection_reason"] = "Document contains indicators of being non-genuine"
+
+            if verification_result["confidence_score"] < self.MIN_GENUINENESS_SCORE:
+                verification_result["is_genuine"] = False
+                verification_result[
+                    "rejection_reason"] = f"Low genuineness confidence: {verification_result['confidence_score']}"
+
+            if not verification_result["security_features_found"]:
+                verification_result["is_genuine"] = False
+                verification_result["rejection_reason"] = "No security features found"
 
             return verification_result
 
         except Exception as e:
-            logger.exception(f"Error verifying document genuineness: {str(e)}")
+            logger.error(f"Error in document genuineness verification: {str(e)}")
+            verification_result["rejection_reason"] = f"Verification error: {str(e)}"
+            return verification_result
+
+    def _identify_documents(self, text: str) -> List[Tuple[str, str]]:
+        """Identify separate documents in the text using template matching"""
+        try:
+
+            chunks = self._split_into_chunks(text)
+            logger.info(f"Split text into {len(chunks)} chunks")
+
+            documents = []
+            for chunk in chunks:
+                if not chunk.strip():
+                    continue
+
+                try:
+
+                    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as temp_file:
+                        temp_file.write(chunk)
+                        temp_file_path = temp_file.name
+
+                    try:
+                        template_match = self.template_matcher.match_document(temp_file_path, chunk)
+                        if template_match and template_match['confidence'] >= self.MIN_CONFIDENCE_THRESHOLD:
+                            documents.append((chunk, template_match['document_type']))
+                            logger.info(f"Identified document of type: {template_match['document_type']}")
+                    finally:
+
+                        try:
+                            os.unlink(temp_file_path)
+                        except Exception as e:
+                            logger.warning(f"Error cleaning up temporary file: {str(e)}")
+
+                except Exception as e:
+                    logger.warning(f"Error matching chunk: {str(e)}")
+                    continue
+
+            if not documents:
+                documents = [(text, "unknown")]
+
+            return documents
+
+        except Exception as e:
+            logger.error(f"Error identifying documents: {str(e)}")
+            return [(text, "unknown")]
+
+    def _process_single_image(self, image_path: str, min_confidence: float) -> Optional[Dict[str, Any]]:
+        """Process a single image file"""
+        try:
+            logger.info(f"Processing single image: {image_path}")
+
+            img = Image.open(image_path)
+            ocr_text = pytesseract.image_to_string(img)
+
+            if not self._is_good_ocr_result(ocr_text):
+                logger.info("Tesseract OCR yielded poor results, trying Gemini Vision")
+                response = self.text_extractor.process_with_gemini(
+                    image_path,
+                    "Extract all text from this document image. Return only the raw text without any formatting."
+                )
+                ocr_text = response.strip()
+
+            if not ocr_text.strip():
+                logger.warning("No text could be extracted from the image")
+                return {
+                    "status": "rejected",
+                    "document_type": "unknown",
+                    "source_file": image_path,
+                    "rejection_reason": "No text could be extracted from the image"
+                }
+
+            result = self._process_text_content(ocr_text, image_path, min_confidence)
+            if result:
+                result["processing_method"] = "ocr"
+                result["source_file"] = image_path
+                return result
+
+            return None
+
+        except Exception as e:
+            logger.error(f"Error processing single image: {str(e)}")
             return {
-                "is_genuine": False,
-                "confidence_score": 0.0,
-                "rejection_reason": f"Error during verification: {str(e)}",
-                "verification_checks": {
-                    "authenticity": {"passed": False, "details": f"Error during verification: {str(e)}"},
-                    "security_features": {"passed": False, "details": "Verification failed"},
-                    "red_flags": {"passed": False, "details": "Verification failed"},
-                    "quality": {"passed": False, "details": "Verification failed"}
-                },
-                "security_features_found": [],
-                "verification_summary": f"Document verification failed due to error: {str(e)}"
+                "status": "error",
+                "document_type": "unknown",
+                "source_file": image_path,
+                "rejection_reason": f"Error processing image: {str(e)}"
             }
 
 
 def main():
-    input_path = "D:\\imageextractor\\identites\\NewMexicoCorp.docx"
-    api_key = API_KEY
+    input_path = "D:\\imageextractor\\identites\\React_Resume.pdf"
+    api_key = API_KEY_1
 
     processor = DocumentProcessor(api_key=api_key)
 
     results = processor.process_file(file_path=input_path)
 
     if results:
-        # Group results by document type
+
         grouped_results = {}
         for result in results:
             doc_type = result["document_type"]
@@ -1543,7 +1671,6 @@ def main():
                 grouped_results[doc_type] = []
             grouped_results[doc_type].append(result)
 
-        # Save results to JSON
         with open("results.json", "w", encoding="utf-8") as f:
             json.dump({
                 "total_documents": len(results),
