@@ -6,15 +6,13 @@ from typing import List, Dict, Any, Optional, Tuple
 import os
 import json
 import re
-from docx import Document
-from Common.constants import *
-from PIL import Image
-import pytesseract
-import traceback
 import sys
 import logging
 from dataclasses import dataclass
 import google.generativeai as genai
+from PIL import Image
+import pytesseract
+import traceback
 from Extractor.ImageExtractor import ImageTextExtractor
 from Extractor.Paddle import flatten_json
 from Factories.DocumentFactory import (
@@ -27,6 +25,15 @@ from Factories.DocumentFactory import (
     ImageTextExtractor,
     TextExtractor
 )
+
+# Global flag for python-docx availability
+try:
+    from docx import Document
+    DOCX_AVAILABLE = True
+except ImportError as e:
+    DOCX_AVAILABLE = False
+    Document = None  # Set to None so we can check later
+    logger.warning(f"python-docx not available - DOCX processing will be limited: {str(e)}")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -68,65 +75,77 @@ class TextProcessor:
 
 class DocumentProcessor:
     def __init__(self, api_key: str, templates_dir: str = "D:\\imageextractor\\identites\\Templates"):
-        self.api_key = api_key
-        self.templates_dir = templates_dir
-        
-        # Initialize text processing components
-        self.text_processor = TextProcessor(api_key)
-        self.text_extractor = TextExtractor(api_key)
-        
-        # Initialize Gemini models
         try:
-            genai.configure(api_key=api_key)
-            self.gemini_vision_model = genai.GenerativeModel('gemini-pro-vision')
-            self.gemini_text_model = genai.GenerativeModel('gemini-pro')
-        except Exception as e:
-            logger.error(f"Error initializing Gemini models: {str(e)}")
-            raise RuntimeError(f"Gemini initialization failed: {str(e)}")
+            self.api_key = api_key
+            self.templates_dir = templates_dir
             
-        # Initialize Pytesseract
-        try:
-            version = pytesseract.get_tesseract_version()
-            logger.info(f"Tesseract version: {version}")
+            # Test Document import early to catch any import issues
+            try:
+                doc_test = Document()
+                logger.info("Successfully initialized python-docx")
+            except Exception as e:
+                logger.warning(f"Warning: python-docx initialization failed: {str(e)}")
+            
+            # Initialize text processing components
+            self.text_processor = TextProcessor(api_key)
+            self.text_extractor = TextExtractor(api_key)
+            
+            # Initialize Gemini models
+            try:
+                genai.configure(api_key=api_key)
+                self.gemini_vision_model = genai.GenerativeModel('gemini-pro-vision')
+                self.gemini_text_model = genai.GenerativeModel('gemini-pro')
+            except Exception as e:
+                logger.error(f"Error initializing Gemini models: {str(e)}")
+                raise RuntimeError(f"Gemini initialization failed: {str(e)}")
+                
+            # Initialize Pytesseract
+            try:
+                version = pytesseract.get_tesseract_version()
+                logger.info(f"Tesseract version: {version}")
+            except Exception as e:
+                logger.error(f"Error initializing Pytesseract: {str(e)}")
+                raise RuntimeError(f"Pytesseract initialization failed: {str(e)}")
+
+            # Initialize document categories
+            self.document_categories = {
+                'identity': [
+                    'passport', 'national_id', 'drivers_license', 'residence_permit',
+                    'citizenship_card', 'voter_id', 'aadhaar_card', 'pan_card'
+                ],
+                'legal': [
+                    'contract', 'agreement', 'deed', 'power_of_attorney',
+                    'court_order', 'legal_notice', 'affidavit', 'will'
+                ],
+                'financial': [
+                    'bank_statement', 'tax_return', 'invoice', 'receipt',
+                    'credit_card_statement', 'loan_document', 'insurance_policy'
+                ],
+                'educational': [
+                    'degree_certificate', 'diploma', 'transcript', 'report_card',
+                    'scholarship_document', 'academic_certificate'
+                ],
+                'medical': [
+                    'medical_report', 'prescription', 'health_insurance',
+                    'vaccination_record', 'medical_certificate'
+                ],
+                'business': [
+                    'business_license', 'incorporation_document', 'tax_registration',
+                    'commercial_invoice', 'shipping_document'
+                ],
+                'other': []  # For uncategorized document types
+            }
+
+            # Initialize document patterns
+            self.document_patterns = self._initialize_document_patterns()
+            self.compiled_patterns = {
+                doc_type: [re.compile(pattern) for pattern in patterns]
+                for doc_type, patterns in self.document_patterns.items()
+            }
+
         except Exception as e:
-            logger.error(f"Error initializing Pytesseract: {str(e)}")
-            raise RuntimeError(f"Pytesseract initialization failed: {str(e)}")
-
-        # Initialize document categories
-        self.document_categories = {
-            'identity': [
-                'passport', 'national_id', 'drivers_license', 'residence_permit',
-                'citizenship_card', 'voter_id', 'aadhaar_card', 'pan_card'
-            ],
-            'legal': [
-                'contract', 'agreement', 'deed', 'power_of_attorney',
-                'court_order', 'legal_notice', 'affidavit', 'will'
-            ],
-            'financial': [
-                'bank_statement', 'tax_return', 'invoice', 'receipt',
-                'credit_card_statement', 'loan_document', 'insurance_policy'
-            ],
-            'educational': [
-                'degree_certificate', 'diploma', 'transcript', 'report_card',
-                'scholarship_document', 'academic_certificate'
-            ],
-            'medical': [
-                'medical_report', 'prescription', 'health_insurance',
-                'vaccination_record', 'medical_certificate'
-            ],
-            'business': [
-                'business_license', 'incorporation_document', 'tax_registration',
-                'commercial_invoice', 'shipping_document'
-            ],
-            'other': []  # For uncategorized document types
-        }
-
-        # Initialize document patterns
-        self.document_patterns = self._initialize_document_patterns()
-        self.compiled_patterns = {
-            doc_type: [re.compile(pattern) for pattern in patterns]
-            for doc_type, patterns in self.document_patterns.items()
-        }
+            logger.error(f"Error initializing DocumentProcessor: {str(e)}")
+            raise RuntimeError(f"DocumentProcessor initialization failed: {str(e)}")
 
     def _create_text_processor(self):
         """Create and configure the text processor"""
@@ -294,9 +313,6 @@ class DocumentProcessor:
     def _determine_docx_processing_method(self, file_path: str) -> str:
         """Determine if DOCX requires OCR or can use normal text extraction"""
         try:
-            from docx import Document
-
-            # First, try to extract normal text content
             doc = Document(file_path)
             text_content = []
 
@@ -328,6 +344,10 @@ class DocumentProcessor:
 
     def _process_docx(self, file_path: str, min_confidence: float) -> List[Dict[str, Any]]:
         """Process a DOCX file by determining if OCR is needed or normal text extraction"""
+        if not DOCX_AVAILABLE or Document is None:
+            logger.warning("python-docx not available - attempting OCR-only processing")
+            return self._process_docx_with_ocr(file_path, min_confidence)
+
         consolidated_results = []
 
         try:
@@ -339,7 +359,12 @@ class DocumentProcessor:
                 # Process using normal text extraction
                 logger.info("Processing DOCX using normal text extraction")
 
-                doc = Document(file_path)
+                try:
+                    doc = Document(file_path)
+                except Exception as e:
+                    logger.error(f"Error opening DOCX file: {str(e)}")
+                    return self._process_docx_with_ocr(file_path, min_confidence)
+
                 text_content = []
 
                 # Extract text from paragraphs
@@ -370,62 +395,7 @@ class DocumentProcessor:
                             consolidated_results.append(result)
 
             else:  # OCR required
-                # Process using OCR on embedded images
-                logger.info("Processing DOCX using OCR on embedded images")
-                processed_images = set()  # Track processed images to avoid duplicates
-
-                document_segments = self._extract_text_from_docx_images(file_path)
-
-                if document_segments:
-                    for segment in document_segments:
-                        # Skip if we've already processed this image
-                        if segment["image_path"] in processed_images:
-                            continue
-
-                        processed_images.add(segment["image_path"])
-
-                        if segment["text"].strip():
-                            logger.info(f"Processing image {segment['image_number']}")
-                            # Try to process as multiple documents first
-                            multi_doc_results = self._process_multiple_documents(segment["text"], file_path, min_confidence)
-                            if multi_doc_results:
-                                for result in multi_doc_results:
-                                    result["image_number"] = segment["image_number"]
-                                    result["processing_method"] = "ocr"
-                                    consolidated_results.append(result)
-                            else:
-                                # If no multiple documents found, process as single document
-                                result = self._process_text_content(segment["text"], file_path, min_confidence)
-                                if result:
-                                    result["image_number"] = segment["image_number"]
-                                    result["processing_method"] = "ocr"
-                                    consolidated_results.append(result)
-
-                # Also try to process any normal text content as backup
-                doc = Document(file_path)
-                text_content = []
-
-                # Extract text from paragraphs
-                for para in doc.paragraphs:
-                    if para.text.strip():
-                        text_content.append(para.text)
-
-                # Extract text from tables
-                for table in doc.tables:
-                    for row in table.rows:
-                        for cell in row.cells:
-                            if cell.text.strip():
-                                text_content.append(cell.text)
-
-                # Process any additional text content found
-                if text_content:
-                    combined_text = "\n".join(text_content)
-                    if len(combined_text.strip()) > 50:  # Only process if substantial
-                        logger.info(f"Also processing {len(combined_text)} characters of normal text from DOCX")
-                        result = self._process_text_content(combined_text, file_path, min_confidence)
-                        if result:
-                            result["processing_method"] = "text_extraction"
-                            consolidated_results.append(result)
+                return self._process_docx_with_ocr(file_path, min_confidence)
 
             # If no valid results were found
             if not consolidated_results:
@@ -433,7 +403,6 @@ class DocumentProcessor:
 
                 # Try to extract basic information even if processing failed
                 try:
-                    from docx import Document
                     doc = Document(file_path)
                     basic_text = []
                     for para in doc.paragraphs:
@@ -472,12 +441,6 @@ class DocumentProcessor:
                     "validation_level": "failed"
                 }]
 
-            # Log the results
-            for result in consolidated_results:
-                logger.info(f"Processed document type: {result.get('document_type', 'unknown')}, "
-                           f"Status: {result.get('status', 'unknown')}, "
-                           f"Image number: {result.get('image_number', 'N/A')}")
-
             return consolidated_results
 
         except Exception as e:
@@ -506,6 +469,132 @@ class DocumentProcessor:
                 "source_file": file_path,
                 "rejection_reason": f"Error processing document: {str(e)}",
                 "extracted_data": error_extracted_data,
+                "confidence": 0.0,
+                "validation_level": "error",
+                "error_details": {
+                    "error_type": type(e).__name__,
+                    "error_message": str(e),
+                    "error_traceback": traceback.format_exc()
+                }
+            }]
+
+    def _process_docx_with_ocr(self, file_path: str, min_confidence: float) -> List[Dict[str, Any]]:
+        """Process a DOCX file using OCR on embedded images"""
+        logger.info("Processing DOCX using OCR on embedded images")
+        consolidated_results = []
+        processed_images = set()  # Track processed images to avoid duplicates
+
+        try:
+            if DOCX_AVAILABLE and Document is not None:
+                document_segments = self._extract_text_from_docx_images(file_path)
+            else:
+                # If python-docx is not available, try to convert DOCX to PDF first
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    pdf_path = os.path.join(temp_dir, "temp.pdf")
+                    try:
+                        self._convert_docx_to_pdf(file_path, pdf_path)
+                        document_segments = self._extract_text_from_pdf_images(pdf_path)
+                    except Exception as e:
+                        logger.error(f"Error converting DOCX to PDF: {str(e)}")
+                        document_segments = []
+
+            if document_segments:
+                for segment in document_segments:
+                    # Skip if we've already processed this image
+                    if segment["image_path"] in processed_images:
+                        continue
+
+                    processed_images.add(segment["image_path"])
+
+                    if segment["text"].strip():
+                        logger.info(f"Processing image {segment['image_number']}")
+                        # Try to process as multiple documents first
+                        multi_doc_results = self._process_multiple_documents(segment["text"], file_path, min_confidence)
+                        if multi_doc_results:
+                            for result in multi_doc_results:
+                                result["image_number"] = segment["image_number"]
+                                result["processing_method"] = "ocr"
+                                consolidated_results.append(result)
+                        else:
+                            # If no multiple documents found, process as single document
+                            result = self._process_text_content(segment["text"], file_path, min_confidence)
+                            if result:
+                                result["image_number"] = segment["image_number"]
+                                result["processing_method"] = "ocr"
+                                consolidated_results.append(result)
+
+            # If python-docx is available, also try to process any normal text content as backup
+            if DOCX_AVAILABLE and Document is not None:
+                try:
+                    doc = Document(file_path)
+                    text_content = []
+
+                    # Extract text from paragraphs
+                    for para in doc.paragraphs:
+                        if para.text.strip():
+                            text_content.append(para.text)
+
+                    # Extract text from tables
+                    for table in doc.tables:
+                        for row in table.rows:
+                            for cell in row.cells:
+                                if cell.text.strip():
+                                    text_content.append(cell.text)
+
+                    # Process any additional text content found
+                    if text_content:
+                        combined_text = "\n".join(text_content)
+                        if len(combined_text.strip()) > 50:  # Only process if substantial
+                            logger.info(f"Also processing {len(combined_text)} characters of normal text from DOCX")
+                            result = self._process_text_content(combined_text, file_path, min_confidence)
+                            if result:
+                                result["processing_method"] = "text_extraction"
+                                consolidated_results.append(result)
+                except Exception as e:
+                    logger.warning(f"Failed to extract text content from DOCX: {str(e)}")
+
+            if not consolidated_results:
+                logger.warning(f"No valid content found in DOCX file through OCR: {file_path}")
+                return [{
+                    "status": "rejected",
+                    "document_type": "unknown",
+                    "source_file": file_path,
+                    "rejection_reason": "No valid content could be extracted through OCR",
+                    "extracted_data": {
+                        "data": {"file_type": "docx", "processing_method": "ocr"},
+                        "confidence": 0.0,
+                        "additional_info": "OCR processing failed to extract valid content",
+                        "document_metadata": {"type": "unknown", "category": "error"}
+                    },
+                    "confidence": 0.0,
+                    "validation_level": "failed"
+                }]
+
+            # Log the results
+            for result in consolidated_results:
+                logger.info(f"Processed document type: {result.get('document_type', 'unknown')}, "
+                           f"Status: {result.get('status', 'unknown')}, "
+                           f"Image number: {result.get('image_number', 'N/A')}")
+
+            return consolidated_results
+
+        except Exception as e:
+            logger.error(f"Error processing DOCX with OCR: {str(e)}")
+            return [{
+                "status": "error",
+                "document_type": "unknown",
+                "source_file": file_path,
+                "rejection_reason": f"Error processing document with OCR: {str(e)}",
+                "extracted_data": {
+                    "data": {
+                        "file_type": "docx",
+                        "processing_error": str(e),
+                        "error_type": type(e).__name__
+                    },
+                    "confidence": 0.0,
+                    "additional_info": f"DOCX OCR processing failed: {str(e)}",
+                    "document_metadata": {"type": "unknown", "category": "error"}
+                },
                 "confidence": 0.0,
                 "validation_level": "error",
                 "error_details": {
@@ -1737,6 +1826,62 @@ class DocumentProcessor:
         except Exception as e:
             logger.error(f"Error processing multiple documents: {str(e)}")
             return []
+
+    def _convert_docx_to_pdf(self, docx_path: str, pdf_path: str) -> None:
+        """Convert a DOCX file to PDF format"""
+        try:
+            # Try using LibreOffice/OpenOffice first
+            try:
+                import subprocess
+                # Check if LibreOffice is available
+                subprocess.run(['soffice', '--version'], check=True, capture_output=True)
+                
+                # Convert using LibreOffice
+                subprocess.run([
+                    'soffice',
+                    '--headless',
+                    '--convert-to', 'pdf',
+                    '--outdir', os.path.dirname(pdf_path),
+                    docx_path
+                ], check=True)
+                
+                # Rename the output file if needed
+                generated_pdf = os.path.join(
+                    os.path.dirname(pdf_path),
+                    os.path.splitext(os.path.basename(docx_path))[0] + '.pdf'
+                )
+                if generated_pdf != pdf_path:
+                    os.rename(generated_pdf, pdf_path)
+                    
+                return
+            except Exception as e:
+                logger.warning(f"LibreOffice conversion failed: {str(e)}")
+
+            # Try using win32com (Windows only)
+            try:
+                import win32com.client
+                word = win32com.client.Dispatch('Word.Application')
+                doc = word.Documents.Open(docx_path)
+                doc.SaveAs(pdf_path, FileFormat=17)  # 17 = PDF format
+                doc.Close()
+                word.Quit()
+                return
+            except Exception as e:
+                logger.warning(f"Win32com conversion failed: {str(e)}")
+
+            # Try using docx2pdf as a last resort
+            try:
+                from docx2pdf import convert
+                convert(docx_path, pdf_path)
+                return
+            except Exception as e:
+                logger.warning(f"docx2pdf conversion failed: {str(e)}")
+
+            raise RuntimeError("All conversion methods failed")
+
+        except Exception as e:
+            logger.error(f"Error converting DOCX to PDF: {str(e)}")
+            raise RuntimeError(f"Failed to convert DOCX to PDF: {str(e)}")
 
 def main():
     try:

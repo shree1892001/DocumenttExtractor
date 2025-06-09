@@ -149,7 +149,7 @@ class DocumentProcessor:
         """Create and configure the text processor"""
         try:
             return self.gemini_text_model
-        except Exception as e:
+                except Exception as e:
             logger.error(f"Error creating text processor: {str(e)}")
             raise RuntimeError(f"Text processor creation failed: {str(e)}")
 
@@ -214,7 +214,7 @@ class DocumentProcessor:
                 for segment in document_segments:
                     # Skip if we've already processed this image
                     if segment["image_path"] in processed_images:
-                        continue
+                    continue
 
                     processed_images.add(segment["image_path"])
 
@@ -256,7 +256,7 @@ class DocumentProcessor:
                 multi_doc_results = self._process_multiple_documents(combined_text, file_path, min_confidence)
                 if multi_doc_results:
                     consolidated_results.extend(multi_doc_results)
-                else:
+            else:
                     # If no multiple documents found, process as single document
                     result = self._process_text_content(combined_text, file_path, min_confidence)
                     if result:
@@ -601,7 +601,7 @@ class DocumentProcessor:
 
             return verification_result
 
-        except Exception as e:
+                    except Exception as e:
             logger.exception(f"Error verifying document genuineness: {str(e)}")
             return {
                 "is_genuine": False,
@@ -633,7 +633,7 @@ class DocumentProcessor:
 
             try:
                 pdf_document = fitz.open(pdf_path)
-            except Exception as e:
+        except Exception as e:
                 logger.error(f"Error opening PDF file: {str(e)}")
                 raise ValueError(f"Failed to open PDF file: {str(e)}")
 
@@ -646,7 +646,7 @@ class DocumentProcessor:
                         text = page.get_text()
                         if text.strip():
                             all_text += text + "\n\n"
-                    except Exception as e:
+        except Exception as e:
                         logger.warning(f"Error processing page {page_num + 1}: {str(e)}")
                         continue
 
@@ -657,16 +657,16 @@ class DocumentProcessor:
                         if multi_doc_results:
                             results.extend(multi_doc_results)
                             return results
-                    except Exception as e:
+        except Exception as e:
                         logger.warning(f"Error processing PDF as multiple documents: {str(e)}")
 
                 # If multiple document processing didn't yield results, process page by page
                 for page_num in range(pdf_document.page_count):
-                    try:
+        try:
                         logger.info(f"Processing page {page_num + 1} of {pdf_document.page_count}")
 
-                        page = pdf_document[page_num]
-                        text = page.get_text()
+                page = pdf_document[page_num]
+                text = page.get_text()
 
                         needs_ocr = self._needs_ocr(text, page)
 
@@ -674,7 +674,7 @@ class DocumentProcessor:
                             logger.info(f"Page {page_num + 1} requires OCR processing")
                             try:
                                 images = page.get_images(full=True)
-                            except Exception as e:
+        except Exception as e:
                                 logger.error(f"Error extracting images from page {page_num + 1}: {str(e)}")
                                 continue
 
@@ -696,13 +696,13 @@ class DocumentProcessor:
                                         try:
                                             with open(temp_image_path, "wb") as img_file:
                                                 img_file.write(img_data["image"])
-                                        except Exception as e:
+        except Exception as e:
                                             logger.error(f"Error saving image: {str(e)}")
                                             continue
 
-                                        try:
+        try:
                                             ocr_text = self._perform_ocr(temp_image_path)
-                                        except Exception as e:
+        except Exception as e:
                                             logger.error(f"Error performing OCR: {str(e)}")
                                             continue
 
@@ -766,9 +766,9 @@ class DocumentProcessor:
                         "rejection_reason": "No valid content found in document"
                     }]
 
-                return results
+            return results
 
-            except Exception as e:
+        except Exception as e:
                 logger.error(f"Error processing PDF file: {str(e)}")
                 return [{
                     "status": "error",
@@ -912,7 +912,7 @@ class DocumentProcessor:
 
             try:
                 img = Image.open(image_path)
-            except Exception as e:
+        except Exception as e:
                 logger.error(f"Error opening image: {str(e)}")
                 raise ValueError(f"Failed to open image: {str(e)}")
 
@@ -991,7 +991,7 @@ class DocumentProcessor:
 
             try:
                 ocr_text = pytesseract.image_to_string(img)
-            except Exception as e:
+        except Exception as e:
                 logger.error(f"Tesseract OCR failed: {str(e)}")
                 raise ValueError(f"OCR processing failed: {str(e)}")
 
@@ -1150,7 +1150,7 @@ class DocumentProcessor:
 
             return results
 
-        except Exception as e:
+    except Exception as e:
             logger.error(f"Error processing multiple documents: {str(e)}")
             return []
 
