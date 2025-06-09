@@ -1,0 +1,36 @@
+{
+  "timestamp": "2025-06-06T10:19:54.074Z",
+  "document_type": "pan card",
+  "template_matched": "pan_card",
+  "template_confidence": 0,
+  "extracted_data": {
+    "extracted_fields": {
+      "name": "Sample Name",
+      "father_name": "Sample Father's Name",
+      "pan_number": "ABCDE1234F",
+      "date_of_birth": "1990-01-01"
+    },
+    "confidence_scores": {
+      "name": 1,
+      "father_name": 1,
+      "pan_number": 1,
+      "date_of_birth": 1
+    },
+    "processing_metadata": {
+      "extraction_method": "document_processor3_service",
+      "model_used": "DocumentProcessor3",
+      "privacy_protected": true,
+      "template_matching": true,
+      "validation_level": "standard",
+      "processing_method": "unknown"
+    }
+  },
+  "file_info": {
+    "filename": "merged_docs.pdf",
+    "file_format": ".pdf",
+    "file_size": 90740,
+    "processing_method": "unknown",
+    "processor_used": "DocumentProcessorService"
+  },
+  "privacy_protected": true
+}

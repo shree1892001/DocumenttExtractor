@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Processing System</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1><i class="fas fa-file-alt"></i> Document Processing System</h1>
+                <p>Template-based document classification and data extraction with privacy protection</p>
+
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Templates Section -->
+            <section class="templates-section">
+                <div class="section-header">
+                    <h2><i class="fas fa-layer-group"></i> Available Templates</h2>
+                    <div class="template-actions">
+                        <div class="template-stats">
+                            <span id="template-count">Loading...</span>
+                        </div>
+                        <button class="btn btn-primary" id="add-template-btn">
+                            <i class="fas fa-plus"></i> Add Template
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="template-categories">
+                    <div class="category-filters">
+                        <button class="filter-btn active" data-category="all">All Templates</button>
+                        <button class="filter-btn" data-category="educational">Educational</button>
+                        <button class="filter-btn" data-category="medical">Medical</button>
+                        <button class="filter-btn" data-category="financial">Financial</button>
+                        <button class="filter-btn" data-category="certification">Certification</button>
+                        <button class="filter-btn" data-category="employment">Employment</button>
+                        <button class="filter-btn" data-category="legal">Legal</button>
+                        <button class="filter-btn" data-category="identity">Identity</button>
+                    </div>
+                </div>
+                
+                <div class="templates-grid" id="templates-grid">
+                    <!-- Templates will be loaded here -->
+                </div>
+
+                <!-- Add New Template Section -->
+                <div class="add-template-section" id="add-template-section" style="display: none;">
+                    <div class="section-header">
+                        <h3><i class="fas fa-plus-circle"></i> Add New Template</h3>
+                        <button class="btn-close" id="close-template-form">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+
+                    <form id="template-upload-form" class="template-upload-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="template-name">Template Name *</label>
+                                <input type="text" id="template-name" name="template_name" required
+                                       placeholder="e.g., My Custom Template">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="document-type">Document Type *</label>
+                                <select id="document-type" name="document_type" required>
+                                    <option value="">Select document type</option>
+
+                                    <!-- Identity Documents -->
+                                    <optgroup label="Identity Documents">
+                                        <option value="aadhaar_card">Aadhaar Card</option>
+                                        <option value="pan_card">PAN Card</option>
+                                        <option value="driving_license">Driving License</option>
+                                        <option value="florida_driving_license">Florida Driving License</option>
+                                        <option value="indian_driving_license">Indian Driving License</option>
+                                        <option value="passport">Passport</option>
+                                        <option value="voter_id">Voter ID</option>
+                                        <option value="national_id">National ID</option>
+                                    </optgroup>
+
+                                    <!-- Educational Documents -->
+                                    <optgroup label="Educational Documents">
+                                        <option value="educational_certificate">Educational Certificate</option>
+                                        <option value="diploma">Diploma</option>
+                                        <option value="degree_certificate">Degree Certificate</option>
+                                        <option value="transcript">Academic Transcript</option>
+                                        <option value="marksheet">Marksheet</option>
+                                        <option value="professional_certification">Professional Certification</option>
+                                    </optgroup>
+
+                                    <!-- Legal & Corporate Documents -->
+                                    <optgroup label="Legal & Corporate">
+                                        <option value="corporate_document">Corporate Document</option>
+                                        <option value="business_license">Business License</option>
+                                        <option value="registration_certificate">Registration Certificate</option>
+                                        <option value="legal_contract">Legal Contract</option>
+                                        <option value="power_of_attorney">Power of Attorney</option>
+                                        <option value="incorporation_certificate">Incorporation Certificate</option>
+                                    </optgroup>
+
+                                    <!-- Financial Documents -->
+                                    <optgroup label="Financial Documents">
+                                        <option value="bank_statement">Bank Statement</option>
+                                        <option value="financial_statement">Financial Statement</option>
+                                        <option value="tax_document">Tax Document</option>
+                                        <option value="invoice">Invoice</option>
+                                        <option value="receipt">Receipt</option>
+                                        <option value="salary_slip">Salary Slip</option>
+                                    </optgroup>
+
+                                    <!-- Medical Documents -->
+                                    <optgroup label="Medical Documents">
+                                        <option value="medical_document">Medical Document</option>
+                                        <option value="medical_license">Medical License</option>
+                                        <option value="prescription">Prescription</option>
+                                        <option value="medical_report">Medical Report</option>
+                                        <option value="health_certificate">Health Certificate</option>
+                                    </optgroup>
+
+                                    <!-- Employment Documents -->
+                                    <optgroup label="Employment Documents">
+                                        <option value="resume">Resume/CV</option>
+                                        <option value="employment_letter">Employment Letter</option>
+                                        <option value="experience_certificate">Experience Certificate</option>
+                                        <option value="appointment_letter">Appointment Letter</option>
+                                        <option value="relieving_letter">Relieving Letter</option>
+                                    </optgroup>
+
+                                    <!-- Property Documents -->
+                                    <optgroup label="Property Documents">
+                                        <option value="property_document">Property Document</option>
+                                        <option value="sale_deed">Sale Deed</option>
+                                        <option value="rental_agreement">Rental Agreement</option>
+                                        <option value="property_tax">Property Tax Document</option>
+                                    </optgroup>
+
+                                    <!-- Other Documents -->
+                                    <optgroup label="Other">
+                                        <option value="insurance_document">Insurance Document</option>
+                                        <option value="utility_bill">Utility Bill</option>
+                                        <option value="travel_document">Travel Document</option>
+                                        <option value="customs_document">Customs Document</option>
+                                        <option value="other">Other/Custom</option>
+                                    </optgroup>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="template-description">Description</label>
+                            <textarea id="template-description" name="description"
+                                      placeholder="Optional description of the template"></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="template-file">Template File *</label>
+                            <div class="file-upload-area" id="template-file-area">
+                                <input type="file" id="template-file" name="file"
+                                       accept=".jpg,.jpeg,.png,.pdf,.docx" required>
+                                <div class="upload-placeholder">
+                                    <i class="fas fa-cloud-upload-alt"></i>
+                                    <p>Click to select or drag & drop template file</p>
+                                    <small>Supported: JPG, PNG, PDF, DOCX (Max 10MB)</small>
+                                </div>
+                                <div class="file-preview" id="template-file-preview" style="display: none;">
+                                    <div class="file-info">
+                                        <i class="fas fa-file"></i>
+                                        <span class="file-name"></span>
+                                        <span class="file-size"></span>
+                                    </div>
+                                    <button type="button" class="remove-file" id="remove-template-file">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-secondary" id="cancel-template-upload">
+                                Cancel
+                            </button>
+                            <button type="submit" class="btn btn-primary" id="upload-template-btn">
+                                <i class="fas fa-upload"></i> Upload Template
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <!-- Document Upload Section -->
+            <section class="upload-section">
+                <div class="section-header">
+                    <h2><i class="fas fa-cloud-upload-alt"></i> Upload Document</h2>
+                    <p>Upload any document format: PDF, DOCX, Images, Text</p>
+                </div>
+                
+                <div class="upload-area" id="upload-area">
+                    <div class="upload-content">
+                        <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                        <h3>Drop your document here or click to browse</h3>
+                        <p>Supported formats: PDF, DOCX, JPG, PNG, TIFF, BMP, GIF, TXT</p>
+                        <input type="file" id="file-input" accept=".pdf,.docx,.jpg,.jpeg,.png,.tiff,.tif,.bmp,.gif,.txt" hidden>
+                        <button class="browse-btn" onclick="document.getElementById('file-input').click()">
+                            <i class="fas fa-folder-open"></i> Browse Files
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="upload-options">
+                    <div class="processing-mode-section">
+                        <h4><i class="fas fa-cogs"></i> Processing Mode</h4>
+                        <div class="processing-modes" id="processing-modes">
+                            <!-- Processing modes will be loaded here -->
+                        </div>
+                    </div>
+
+                    <div class="advanced-options">
+                        <label class="checkbox-container">
+                            <input type="checkbox" id="use-local-only">
+                            <span class="checkmark"></span>
+                            Force Local Processing Only (100% Offline)
+                        </label>
+                        <label class="checkbox-container">
+                            <input type="checkbox" id="use-template-matching" checked>
+                            <span class="checkmark"></span>
+                            Enable Template Matching (Recommended)
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="file-info" id="file-info" style="display: none;">
+                    <div class="file-details">
+                        <i class="fas fa-file"></i>
+                        <span id="file-name"></span>
+                        <span id="file-size"></span>
+                    </div>
+                    <button class="process-btn" id="process-btn">
+                        <i class="fas fa-cogs"></i> Process Document
+                    </button>
+                </div>
+            </section>
+
+            <!-- Processing Status -->
+            <section class="processing-section" id="processing-section" style="display: none;">
+                <div class="processing-status">
+                    <div class="spinner"></div>
+                    <h3>Processing Document...</h3>
+                    <p id="processing-message">Analyzing document and matching with templates</p>
+                </div>
+            </section>
+
+            <!-- Results Section -->
+            <section class="results-section" id="results-section" style="display: none;">
+                <div class="section-header">
+                    <h2><i class="fas fa-chart-line"></i> Processing Results</h2>
+                </div>
+                
+                <div class="results-grid">
+                    <!-- Document Type Card -->
+                    <div class="result-card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-tag"></i> Document Type</h3>
+                        </div>
+                        <div class="card-content">
+                            <div class="document-type">
+                                <span id="document-type">Unknown</span>
+                                <div class="confidence-badge" id="confidence-badge">
+                                    <span id="confidence-score">0%</span>
+                                </div>
+                            </div>
+                            <div class="template-info" id="template-info">
+                                <p><strong>Template:</strong> <span id="matched-template">None</span></p>
+                                <p><strong>Category:</strong> <span id="template-category">Unknown</span></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Extracted Data Card -->
+                    <div class="result-card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-database"></i> Extracted Data</h3>
+                        </div>
+                        <div class="card-content">
+                            <div class="extracted-fields" id="extracted-fields">
+                                <!-- Extracted data will be displayed here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Processing Info Card -->
+                    <div class="result-card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-info-circle"></i> Processing Information</h3>
+                        </div>
+                        <div class="card-content">
+                            <div class="processing-info" id="processing-info">
+                                <!-- Processing details will be displayed here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Template Matching Card -->
+                    <div class="result-card" id="template-matching-card" style="display: none;">
+                        <div class="card-header">
+                            <h3><i class="fas fa-layer-group"></i> Template Matching</h3>
+                        </div>
+                        <div class="card-content">
+                            <div class="template-matching-info" id="template-matching-info">
+                                <!-- Template matching details will be displayed here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Privacy Protection Card -->
+                    <div class="result-card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-shield-alt"></i> Privacy Protection</h3>
+                        </div>
+                        <div class="card-content">
+                            <div class="privacy-status" id="privacy-status">
+                                <!-- Privacy information will be displayed here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="action-buttons">
+                    <button class="btn btn-secondary" onclick="resetForm()">
+                        <i class="fas fa-redo"></i> Process Another Document
+                    </button>
+                    <button class="btn btn-primary" onclick="exportResults()">
+                        <i class="fas fa-download"></i> Export Results
+                    </button>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>&copy; 2024 Document Processing System - Privacy-First Document Analysis</p>
+        </footer>
+    </div>
+
+    <!-- Template Suggestion Modal -->
+    <div class="modal" id="template-suggestion-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-lightbulb"></i> Create New Template?</h3>
+                <span class="close" onclick="closeTemplateSuggestionModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="suggestion-content">
+                    <p class="suggestion-message">
+                        <strong>Document type not recognized!</strong><br>
+                        Would you like to create a new template for this document type?
+                    </p>
+
+                    <div class="suggestion-details" id="suggestion-details">
+                        <!-- Suggestion details will be populated here -->
+                    </div>
+
+                    <div class="suggestion-preview" id="suggestion-preview">
+                        <h4>Extracted Content Preview:</h4>
+                        <div class="content-preview" id="content-preview">
+                            <!-- Content preview will be shown here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeTemplateSuggestionModal()">
+                    Not Now
+                </button>
+                <button class="btn btn-primary" onclick="acceptTemplateSuggestion()">
+                    <i class="fas fa-plus"></i> Create Template
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error Modal -->
+    <div class="modal" id="error-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-exclamation-triangle"></i> Error</h3>
+                <span class="close" onclick="closeModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p id="error-message"></p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

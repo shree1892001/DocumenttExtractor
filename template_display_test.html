@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Template Display Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; }
+        .templates-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+        .template-card { background: white; border-radius: 10px; padding: 20px; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1); border-left: 4px solid #3498db; }
+        .template-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px; }
+        .template-card h3 { color: #2c3e50; margin: 0; flex: 1; margin-right: 10px; }
+        .template-category { display: inline-block; background: #e8f4fd; color: #3498db; padding: 4px 12px; border-radius: 15px; font-size: 0.8rem; font-weight: 600; }
+        .template-file-info { background: #f8f9fa; border-radius: 6px; padding: 10px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
+        .file-details { display: flex; flex-direction: column; flex: 1; }
+        .file-name { font-weight: 600; color: #2c3e50; font-size: 0.9em; }
+        .file-size { color: #7f8c8d; font-size: 0.8em; margin-top: 2px; }
+        .file-type { background: #e74c3c; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.8em; font-weight: 600; }
+        .template-description { color: #7f8c8d; margin-bottom: 15px; line-height: 1.5; }
+        .fields-section { margin-bottom: 10px; }
+        .fields-section strong { display: block; color: #2c3e50; font-size: 0.9em; margin-bottom: 5px; }
+        .field-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+        .field-tag { display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 0.8em; font-weight: 500; text-transform: capitalize; }
+        .field-tag.required { background: #e8f5e8; color: #27ae60; border: 1px solid #27ae60; }
+        .field-tag.optional { background: #fff3cd; color: #856404; border: 1px solid #ffc107; }
+    </style>
+</head>
+<body>
+    <h1>🎯 Updated Template Display</h1>
+    <p>This shows how your actual templates from the templates directory will be displayed:</p>
+    
+    <div class="templates-grid" id="templates-container"></div>
+
+    <script>
+        // Sample template data based on YOUR ACTUAL templates directory
+        const sampleTemplates = [
+            {
+                name: "sample_aadhaar",
+                display_name: "Sample Aadhaar",
+                filename: "sample_aadhaar.docx",
+                file_extension: ".docx",
+                file_size: 245760,
+                document_type: "aadhaar_card",
+                category: "identity",
+                description: "AADHAAR_CARD template (.docx)",
+                required_fields: ["name", "aadhaar_number", "date_of_birth", "address"],
+                optional_fields: ["confidence_score", "processing_method"]
+            },
+            {
+                name: "sample_pan",
+                display_name: "Sample Pan",
+                filename: "sample_pan.pdf",
+                file_extension: ".pdf",
+                file_size: 189440,
+                document_type: "pan_card",
+                category: "identity",
+                description: "PAN_CARD template (.pdf)",
+                required_fields: ["name", "fathers_name", "pan_number", "date_of_birth"],
+                optional_fields: ["confidence_score", "processing_method"]
+            },
+            {
+                name: "sample_license",
+                display_name: "Sample License",
+                filename: "sample_license.docx",
+                file_extension: ".docx",
+                file_size: 312320,
+                document_type: "driving_license",
+                category: "identity",
+                description: "DRIVING_LICENSE template (.docx)",
+                required_fields: ["name", "license_number", "date_of_birth", "address", "vehicle_class"],
+                optional_fields: ["confidence_score", "processing_method"]
+            },
+            {
+                name: "florida_license",
+                display_name: "Florida License",
+                filename: "florida_license.jpg",
+                file_extension: ".jpg",
+                file_size: 278528,
+                document_type: "florida_driving_license",
+                category: "identity",
+                description: "FLORIDA_DRIVING_LICENSE template (.jpg)",
+                required_fields: ["name", "license_number", "date_of_birth", "address", "state", "vehicle_class"],
+                optional_fields: ["confidence_score", "processing_method"]
+            },
+            {
+                name: "indian_license",
+                display_name: "Indian License",
+                filename: "indian_license.jpg",
+                file_extension: ".jpg",
+                file_size: 298765,
+                document_type: "indian_driving_license",
+                category: "identity",
+                description: "INDIAN_DRIVING_LICENSE template (.jpg)",
+                required_fields: ["name", "license_number", "date_of_birth", "address", "vehicle_class"],
+                optional_fields: ["confidence_score", "processing_method"]
+            },
+            {
+                name: "passport",
+                display_name: "Passport",
+                filename: "passport.jpg",
+                file_extension: ".jpg",
+                file_size: 356789,
+                document_type: "passport",
+                category: "identity",
+                description: "PASSPORT template (.jpg)",
+                required_fields: ["name", "passport_number", "date_of_birth", "place_of_birth", "nationality"],
+                optional_fields: ["confidence_score", "processing_method"]
+            },
+            {
+                name: "newmexicocorp",
+                display_name: "New Mexico Corp",
+                filename: "NewMexicoCorp.pdf",
+                file_extension: ".pdf",
+                file_size: 456123,
+                document_type: "corporate_document",
+                category: "legal",
+                description: "CORPORATE_DOCUMENT template (.pdf)",
+                required_fields: ["company_name", "registration_number", "address", "incorporation_date"],
+                optional_fields: ["confidence_score", "processing_method"]
+            }
+        ];
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function createTemplateCard(template) {
+            const card = document.createElement('div');
+            card.className = 'template-card';
+            
+            const fileSize = formatFileSize(template.file_size);
+            
+            card.innerHTML = `
+                <div class="template-header">
+                    <h3>${template.display_name}</h3>
+                    <div class="template-category">${template.category.toUpperCase()}</div>
+                </div>
+                <div class="template-file-info">
+                    <div class="file-details">
+                        <span class="file-name">${template.filename}</span>
+                        <span class="file-size">${fileSize}</span>
+                    </div>
+                    <div class="file-type">${template.file_extension.toUpperCase()}</div>
+                </div>
+                <p class="template-description">${template.description}</p>
+                <div class="template-fields">
+                    <div class="fields-section">
+                        <strong>Required Fields:</strong>
+                        <div class="field-tags">
+                            ${template.required_fields.map(field => 
+                                `<span class="field-tag required">${field.replace('_', ' ')}</span>`
+                            ).join('')}
+                        </div>
+                    </div>
+                    <div class="fields-section">
+                        <strong>Optional Fields:</strong>
+                        <div class="field-tags">
+                            ${template.optional_fields.map(field => 
+                                `<span class="field-tag optional">${field.replace('_', ' ')}</span>`
+                            ).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            return card;
+        }
+
+        // Display sample templates
+        const container = document.getElementById('templates-container');
+        sampleTemplates.forEach(template => {
+            const card = createTemplateCard(template);
+            container.appendChild(card);
+        });
+    </script>
+</body>
+</html>

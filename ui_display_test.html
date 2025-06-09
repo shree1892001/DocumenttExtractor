@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UI Display Test</title>
+    <style>
+        .extracted-field {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 10px 0;
+            border-bottom: 1px solid #ecf0f1;
+        }
+        .field-name {
+            font-weight: 600;
+            color: #2c3e50;
+            flex: 0 0 40%;
+            margin-right: 15px;
+        }
+        .field-value {
+            color: #7f8c8d;
+            text-align: right;
+            flex: 1;
+            word-wrap: break-word;
+            line-height: 1.4;
+        }
+        .field-value strong {
+            color: #34495e;
+            font-weight: 600;
+        }
+        .field-value small.success {
+            background-color: #d4edda;
+            color: #155724;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.8em;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <h2>🎯 Fixed UI Display Test</h2>
+    <p>This shows how your PAN card data will now be displayed:</p>
+    
+    <div id="test-fields"></div>
+
+    <script>
+        // Sample data from your PAN card response
+        const sampleData = {
+            "document_identifier": "HOKPP6906M",
+            "name": "ASHWINI VYANKOJI PAWAR", 
+            "fathers_name": "VYANKOJI PAWAR",
+            "date_of_birth": "2002-01-18",
+            "date_on_card": "2023-05-19",
+            "issuing_authority": "INCOME TAX DEPARTMENT GOVT. OF INDIA",
+            "personal_information": {
+                "name": "ASHWINI VYANKOJI PAWAR",
+                "fathers_name": "VYANKOJI PAWAR",
+                "date_of_birth": "2002-01-18"
+            },
+            "official_information": {
+                "issuing_authority": "INCOME TAX DEPARTMENT GOVT. OF INDIA",
+                "issue_date": "2023-05-19"
+            },
+            "dates": {
+                "date_of_birth": "2002-01-18",
+                "issue_date": "2023-05-19"
+            }
+        };
+
+        function formatFieldName(name) {
+            return name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function formatNestedObject(obj) {
+            const entries = Object.entries(obj);
+            if (entries.length === 0) {
+                return '<em>No data</em>';
+            }
+            
+            if (entries.length <= 2) {
+                return entries.map(([key, val]) => {
+                    const formattedKey = formatFieldName(key);
+                    const formattedVal = escapeHtml(String(val));
+                    return `<strong>${formattedKey}:</strong> ${formattedVal}`;
+                }).join(' • ');
+            }
+            
+            return '<div style="text-align: left; margin-top: 5px;">' + 
+                entries.map(([key, val]) => {
+                    const formattedKey = formatFieldName(key);
+                    const formattedVal = escapeHtml(String(val));
+                    return `• <strong>${formattedKey}:</strong> ${formattedVal}`;
+                }).join('<br>') + 
+                '</div>';
+        }
+
+        function formatFieldValue(value) {
+            if (value === null || value === undefined) {
+                return '<em>Not available</em>';
+            }
+            
+            if (typeof value === 'string') {
+                return escapeHtml(value);
+            }
+            
+            if (typeof value === 'number') {
+                return value.toString();
+            }
+            
+            if (typeof value === 'object') {
+                return formatNestedObject(value);
+            }
+            
+            return escapeHtml(String(value));
+        }
+
+        function createExtractedField(name, value, confidence) {
+            const field = document.createElement('div');
+            field.className = 'extracted-field';
+            
+            const confidencePercent = Math.round(confidence * 100);
+            const confidenceClass = 'success';
+            
+            let formattedValue = formatFieldValue(value);
+            
+            field.innerHTML = `
+                <div class="field-name">${formatFieldName(name)}</div>
+                <div class="field-value">
+                    <span>${formattedValue}</span>
+                    <small class="${confidenceClass}"> (${confidencePercent}%)</small>
+                </div>
+            `;
+            
+            return field;
+        }
+
+        // Display the test data
+        const container = document.getElementById('test-fields');
+        Object.entries(sampleData).forEach(([fieldName, fieldValue]) => {
+            const fieldElement = createExtractedField(fieldName, fieldValue, 0.8);
+            container.appendChild(fieldElement);
+        });
+    </script>
+</body>
+</html>

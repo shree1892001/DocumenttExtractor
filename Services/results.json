@@ -1,55 +1,51 @@
 {
   "total_documents": 1,
   "document_types": [
-    "driving licence"
+    "pan_card"
   ],
   "results": {
-    "driving licence": [
+    "pan_card": [
       {
         "status": "rejected",
-        "document_type": "driving licence",
-        "source_file": "D:\\imageextractor\\identites\\OIP.pdf",
-        "rejection_reason": "Lack of verifiable security features, highly questionable names and data inconsistencies, poor document quality, and absence of expected official formatting.",
+        "document_type": "pan_card",
+        "source_file": "D:\\imageextractor\\identites\\merged_docs.pdf",
+        "rejection_reason": "Missing crucial security features and insufficient data for verification.  The provided data lacks essential elements of a genuine PAN card, such as a physical image for security feature analysis and a valid PAN number format.",
         "verification_result": {
           "is_genuine": false,
-          "confidence_score": 0.3,
-          "rejection_reason": "Lack of verifiable security features, highly questionable names and data inconsistencies, poor document quality, and absence of expected official formatting.",
+          "confidence_score": 0.05,
+          "rejection_reason": "Missing crucial security features and insufficient data for verification.  The provided data lacks essential elements of a genuine PAN card, such as a physical image for security feature analysis and a valid PAN number format.",
           "verification_checks": {
             "authenticity": {
               "passed": false,
-              "details": "The document lacks any verifiable security features typically found on UK driving licenses (e.g., holograms, watermarks, specific fonts, microprinting). The format and structure are not consistent with known UK driving license formats.  The names provided are highly unusual and potentially fabricated.  Official headers, footers, and stamps are absent. The provided 'license number' is ambiguous and the additional text and numbers are meaningless.",
-              "confidence": 0.1
+              "details": "The provided data lacks a physical image, making it impossible to verify official text, formatting, structure, layout, security features, printing standards, headers, footers, stamps, or marks. The PAN number format is also suspect.",
+              "confidence": 0.0
             },
             "security_features": {
               "passed": false,
-              "details": "No security features like holograms, watermarks, UV markings, or specific security printing techniques were detected.  The absence of these features strongly suggests the document is not genuine.",
-              "confidence": 0.1
+              "details": "No security features (seals, stamps, watermarks, holograms, QR codes, barcodes, digital signatures, security numbers, anti-counterfeit measures) could be verified due to the absence of a physical image.",
+              "confidence": 0.0
             },
             "data_validation": {
               "passed": false,
-              "details": "The names ('wonga', 'Sana', 'feo', 'iaosane', 'dour oxesco', 'huniaisanaatt') are highly suspicious and do not adhere to typical name patterns.  The additional numbers and text have no apparent meaning or relevance. The document identifier is ambiguous. The date of issue (1976) is very old, making it improbable without significant additional evidence to corroborate its authenticity.",
-              "confidence": 0.3
+              "details": "While the date format is acceptable, the PAN number 'ABCDE1234F' is highly suspicious.  A valid PAN number follows a specific alphanumeric format (5 alphabetic characters followed by 4 numeric characters followed by 1 alphabetic character).  The provided number does not conform to this standard.  Further, without an address, complete data validation is impossible.",
+              "confidence": 0.2
             },
             "quality": {
               "passed": false,
-              "details": "The document is described as having poor quality and being partially legible.  Handwritten entries and potential misspellings further indicate a lack of professional creation. The provided image (not directly available for analysis) is presumably of low resolution and lacks clarity. This points towards a non-official document.",
-              "confidence": 0.7
+              "details": "Unable to assess printing quality, text alignment, smudges, marks, color consistency, formatting, or signs of manipulation due to the lack of a physical image.",
+              "confidence": 0.0
             }
           },
           "security_features_found": [],
-          "verification_summary": "The document shows numerous inconsistencies and lacks crucial security features expected of a genuine UK driving license from 1976 or any other time.  The data quality and overall appearance strongly suggest that this is not a genuine document.",
+          "verification_summary": "The provided data is insufficient to verify the authenticity of the PAN card.  The absence of a physical image and an invalid PAN number format strongly suggest that the document is not genuine.",
           "recommendations": [
-            "Obtain a high-resolution image of the original document for better analysis.",
-            "Compare the alleged license number with official UK driving license number formats.",
-            "Investigate the potential origins of this document and any related context.",
-            "Seek professional forensic document examination if authenticity is critical."
+            "Provide a high-quality image of the physical PAN card for thorough verification.",
+            "Ensure that all data fields are accurately captured, including the address.",
+            "Verify the PAN number against the official PAN database (if accessible)."
           ]
         },
         "chunk_index": 1,
-        "total_chunks": 1,
-        "page_number": 1,
-        "image_index": 1,
-        "processing_method": "ocr"
+        "total_chunks": 2
       }
     ]
   }

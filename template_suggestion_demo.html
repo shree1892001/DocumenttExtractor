@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Template Suggestion System</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; }
+        .demo-container { max-width: 1000px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        .section { margin-bottom: 30px; }
+        .section h2 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+        .feature-list { list-style: none; padding: 0; }
+        .feature-list li { padding: 10px 0; border-bottom: 1px solid #ecf0f1; }
+        .feature-list li:before { content: "✅"; margin-right: 10px; }
+        .code-block { background: #f8f9fa; padding: 15px; border-radius: 5px; border-left: 4px solid #3498db; margin: 10px 0; }
+        .scenario { background: #e8f5e8; padding: 15px; border-radius: 5px; margin: 10px 0; border-left: 4px solid #27ae60; }
+        .ui-preview { background: #f0f8ff; padding: 15px; border-radius: 5px; border: 1px solid #3498db; }
+        .banner-demo { background: linear-gradient(135deg, #f39c12, #e67e22); color: white; padding: 20px; border-radius: 10px; margin: 15px 0; }
+        .suggestion-content { display: flex; align-items: center; gap: 20px; }
+        .suggestion-icon { font-size: 2rem; }
+        .suggestion-text { flex: 1; }
+        .suggestion-actions { display: flex; gap: 10px; }
+        .btn { padding: 8px 16px; border: none; border-radius: 5px; cursor: pointer; font-size: 0.85rem; }
+        .btn-primary { background: #3498db; color: white; }
+        .btn-secondary { background: #95a5a6; color: white; }
+    </style>
+</head>
+<body>
+    <div class="demo-container">
+        <h1>🧠 Smart Template Suggestion System</h1>
+        <p><strong>Your DocumentProcessor3 now automatically suggests creating new templates when document types don't match existing ones!</strong></p>
+        
+        <div class="section">
+            <h2>🎯 How It Works</h2>
+            <p>The system intelligently analyzes documents and suggests template creation in these scenarios:</p>
+            
+            <ul class="feature-list">
+                <li><strong>Unknown Document Type:</strong> When DocumentProcessor3 can't identify the document type</li>
+                <li><strong>Low Confidence Match:</strong> When confidence is below 70% (configurable)</li>
+                <li><strong>Content Analysis:</strong> Analyzes document text to suggest appropriate template type</li>
+                <li><strong>Smart Pre-filling:</strong> Automatically fills template form with suggested details</li>
+                <li><strong>Field Extraction:</strong> Identifies potential fields from document content</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>🔧 Backend Implementation</h2>
+            
+            <h3>DocumentProcessor3 Enhancements:</h3>
+            <div class="code-block">
+                ✅ <strong>_generate_template_suggestion()</strong> - Analyzes document content<br>
+                ✅ <strong>_analyze_content_for_template_type()</strong> - Detects document patterns<br>
+                ✅ <strong>_extract_sample_fields()</strong> - Extracts potential field values<br>
+                ✅ <strong>Template suggestions in responses</strong> - Added to API responses
+            </div>
+            
+            <h3>Content Analysis Patterns:</h3>
+            <div class="code-block">
+                • <strong>Aadhaar:</strong> "aadhaar", "aadhar", "uid", "unique identification"<br>
+                • <strong>PAN:</strong> "pan", "permanent account", "income tax"<br>
+                • <strong>License:</strong> "driving", "license", "licence", "vehicle"<br>
+                • <strong>Passport:</strong> "passport", "travel", "nationality"<br>
+                • <strong>Corporate:</strong> "company", "corporation", "business"<br>
+                • <strong>Educational:</strong> "certificate", "diploma", "degree"<br>
+                • <strong>Medical:</strong> "medical", "hospital", "doctor", "patient"
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🎨 User Experience</h2>
+            
+            <h3>Scenario 1: Unknown Document Type</h3>
+            <div class="scenario">
+                <strong>User uploads:</strong> A custom certificate not in existing templates<br>
+                <strong>DocumentProcessor3:</strong> Returns "unknown" document type<br>
+                <strong>System response:</strong> Shows suggestion banner with pre-filled template details
+            </div>
+            
+            <div class="banner-demo">
+                <div class="suggestion-content">
+                    <div class="suggestion-icon">💡</div>
+                    <div class="suggestion-text">
+                        <h4>Create New Template?</h4>
+                        <p><strong>Reason:</strong> Document type not recognized (confidence: 25%)</p>
+                        <p><strong>Suggested:</strong> Custom Certificate Template (educational_certificate)</p>
+                        <p><strong>Confidence:</strong> 85%</p>
+                    </div>
+                    <div class="suggestion-actions">
+                        <button class="btn btn-secondary">Dismiss</button>
+                        <button class="btn btn-primary">Create Template</button>
+                    </div>
+                </div>
+            </div>
+            
+            <h3>Scenario 2: Low Confidence Match</h3>
+            <div class="scenario">
+                <strong>User uploads:</strong> A document similar to existing template but different format<br>
+                <strong>DocumentProcessor3:</strong> Returns low confidence (60%)<br>
+                <strong>System response:</strong> Suggests creating specific template for better accuracy
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🚀 Smart Features</h2>
+            
+            <h3>Intelligent Form Pre-filling:</h3>
+            <div class="ui-preview">
+                When user clicks "Create Template", the form is automatically filled with:<br>
+                ├── <strong>Template Name:</strong> "Custom Certificate Template"<br>
+                ├── <strong>Document Type:</strong> "educational_certificate"<br>
+                ├── <strong>Description:</strong> "Custom educational certificate template detected from document content"<br>
+                └── <strong>Suggested Fields:</strong> student_name, institution, degree, graduation_date
+            </div>
+            
+            <h3>Content Analysis Results:</h3>
+            <div class="code-block">
+                <strong>Extracted Sample Data:</strong><br>
+                • <strong>Dates Found:</strong> ["15/06/2023", "2023-06-15"]<br>
+                • <strong>ID Numbers:</strong> ["CERT123456", "2023001234"]<br>
+                • <strong>Names Found:</strong> ["John Doe", "University of Technology"]<br>
+                • <strong>Content Preview:</strong> "This certificate is awarded to John Doe..."
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>📋 Complete Workflow</h2>
+            
+            <h3>Step 1: Document Processing</h3>
+            <div class="code-block">
+                User uploads document → DocumentProcessor3 processes → Returns results with template_suggestion
+            </div>
+            
+            <h3>Step 2: Suggestion Detection</h3>
+            <div class="code-block">
+                UI checks for template_suggestion → Shows banner if should_create_template = true
+            </div>
+            
+            <h3>Step 3: User Interaction</h3>
+            <div class="code-block">
+                User clicks "Create Template" → Form pre-filled → User can modify → Upload template
+            </div>
+            
+            <h3>Step 4: Template Creation</h3>
+            <div class="code-block">
+                Template uploaded → Added to system → Available for future documents
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🎯 Benefits</h2>
+            
+            <ul class="feature-list">
+                <li><strong>Proactive Assistance:</strong> System suggests solutions instead of just failing</li>
+                <li><strong>Improved Accuracy:</strong> More templates = better document recognition</li>
+                <li><strong>User-Friendly:</strong> Guided template creation with smart suggestions</li>
+                <li><strong>Learning System:</strong> Gets better as more templates are added</li>
+                <li><strong>Reduced Manual Work:</strong> Auto-filled forms save time</li>
+                <li><strong>Content-Aware:</strong> Analyzes document content for intelligent suggestions</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>🧪 Testing Scenarios</h2>
+            
+            <h3>Test Case 1: Upload Unknown Document</h3>
+            <div class="code-block">
+                1. Upload a document type not in your templates<br>
+                2. Process the document<br>
+                3. See suggestion banner appear<br>
+                4. Click "Create Template"<br>
+                5. Form pre-filled with intelligent suggestions<br>
+                6. Upload the template<br>
+                7. Process same document type again - now recognized!
+            </div>
+            
+            <h3>Test Case 2: Low Confidence Match</h3>
+            <div class="code-block">
+                1. Upload document similar to existing template but different format<br>
+                2. Process with low confidence result<br>
+                3. See suggestion for creating specific template<br>
+                4. Create template for better accuracy
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>✅ Implementation Complete</h2>
+            
+            <p><strong>Your DocumentProcessor3 system now includes:</strong></p>
+            
+            <ul class="feature-list">
+                <li>Automatic template suggestion detection</li>
+                <li>Content analysis for intelligent suggestions</li>
+                <li>Smart form pre-filling</li>
+                <li>Visual suggestion banners</li>
+                <li>Seamless template creation workflow</li>
+                <li>Field extraction and analysis</li>
+                <li>Responsive UI design</li>
+            </ul>
+            
+            <div class="ui-preview">
+                <strong>🎉 Ready to Test!</strong><br>
+                Your system will now automatically suggest creating new templates when document types don't match existing ones, making your document processing system more intelligent and user-friendly!
+            </div>
+        </div>
+    </div>
+</body>
+</html>

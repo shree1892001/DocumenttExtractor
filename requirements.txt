@@ -1,7 +1,65 @@
-streamlit
-asyncio
-langchain-google-genai
-browser-use
-requests
+# Core Web Framework
+fastapi
+uvicorn[standard]
+
+# Google AI/ML Libraries
+google-generativeai
+google-cloud-aiplatform
+
+# Document Processing Libraries
+PyMuPDF  # fitz for PDF processing
+python-docx  # DOCX file processing
+python-multipart  # For file uploads in FastAPI
+
+# Image Processing & OCR
+Pillow  # PIL for image processing
+pytesseract  # OCR text extraction
+opencv-python  # Computer vision (if needed)
+
+# Database Libraries
+psycopg2-binary  # PostgreSQL adapter
+SQLAlchemy  # ORM (if used)
+
+# Data Processing
 pandas
-playwright
+numpy
+
+# HTTP & API Libraries
+requests
+httpx  # Async HTTP client
+
+# Async & Concurrency
+asyncio  # Built-in, but listed for clarity
+aiofiles # Async file operations
+
+# Logging & Monitoring
+python-json-logger
+
+# Development & Testing
+pytest
+pytest-asyncio
+black # Code formatting
+flake8 # Linting
+
+# Type Hints & Validation
+pydantic
+typing-extensions
+
+# File Handling & Utilities
+python-magic # File type detection
+pathlib  # Built-in, but listed for clarity
+tempfile  # Built-in
+os-sys  # Built-in utilities
+json  # Built-in
+re  # Built-in regex
+datetime  # Built-in
+traceback  # Built-in
+sys  # Built-in
+logging  # Built-in
+functools  # Built-in
+time  # Built-in
+threading  # Built-in
+dataclasses  # Built-in (Python 3.7+)
+abc  # Built-in abstract base classes
+io  # Built-in I/O operations
+

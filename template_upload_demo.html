@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Template Upload Demo</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; }
+        .demo-container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        .section { margin-bottom: 30px; }
+        .section h2 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+        .feature-list { list-style: none; padding: 0; }
+        .feature-list li { padding: 10px 0; border-bottom: 1px solid #ecf0f1; }
+        .feature-list li:before { content: "✅"; margin-right: 10px; }
+        .code-block { background: #f8f9fa; padding: 15px; border-radius: 5px; border-left: 4px solid #3498db; margin: 10px 0; }
+        .api-endpoint { background: #e8f5e8; padding: 10px; border-radius: 5px; margin: 10px 0; }
+        .ui-preview { background: #f0f8ff; padding: 15px; border-radius: 5px; border: 1px solid #3498db; }
+    </style>
+</head>
+<body>
+    <div class="demo-container">
+        <h1>🎯 Template Upload Feature - Complete Implementation</h1>
+        
+        <div class="section">
+            <h2>📋 Feature Overview</h2>
+            <p>I've added a complete template upload system that allows users to add new templates when they're not present in the system.</p>
+            
+            <ul class="feature-list">
+                <li><strong>Backend API Endpoint:</strong> Upload templates via REST API</li>
+                <li><strong>Frontend UI Form:</strong> User-friendly upload interface</li>
+                <li><strong>File Validation:</strong> Type and size validation</li>
+                <li><strong>Drag & Drop Support:</strong> Modern file upload experience</li>
+                <li><strong>Real-time Preview:</strong> Shows file info before upload</li>
+                <li><strong>Auto-refresh:</strong> Templates list updates after upload</li>
+                <li><strong>Error Handling:</strong> Comprehensive error messages</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>🔧 Backend Implementation</h2>
+            
+            <h3>New API Endpoint:</h3>
+            <div class="api-endpoint">
+                <strong>POST</strong> /api/v1/templates/upload
+            </div>
+            
+            <h3>Request Parameters:</h3>
+            <div class="code-block">
+                • <strong>file:</strong> Template file (JPG, PNG, PDF, DOCX)<br>
+                • <strong>template_name:</strong> Name for the template<br>
+                • <strong>document_type:</strong> Type of document<br>
+                • <strong>description:</strong> Optional description
+            </div>
+            
+            <h3>File Validation:</h3>
+            <div class="code-block">
+                • <strong>Allowed types:</strong> .jpg, .jpeg, .png, .pdf, .docx<br>
+                • <strong>Size limit:</strong> 10MB maximum<br>
+                • <strong>Duplicate check:</strong> Prevents overwriting existing templates<br>
+                • <strong>Safe naming:</strong> Converts to safe filenames
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🎨 Frontend Implementation</h2>
+            
+            <h3>UI Components Added:</h3>
+            <div class="ui-preview">
+                <strong>📄 Template Upload Form:</strong><br>
+                ├── Template Name Input<br>
+                ├── Document Type Selector<br>
+                ├── Description Textarea<br>
+                ├── File Upload Area (Drag & Drop)<br>
+                ├── File Preview Section<br>
+                └── Action Buttons (Cancel/Upload)
+            </div>
+            
+            <h3>User Experience Features:</h3>
+            <div class="code-block">
+                • <strong>Add Template Button:</strong> Shows upload form<br>
+                • <strong>Drag & Drop:</strong> Modern file upload<br>
+                • <strong>File Preview:</strong> Shows name, size, type<br>
+                • <strong>Progress Feedback:</strong> Loading states<br>
+                • <strong>Success/Error Messages:</strong> Clear feedback<br>
+                • <strong>Auto-refresh:</strong> Updates template list
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>📱 How It Works</h2>
+            
+            <h3>Step 1: User clicks "Add Template" button</h3>
+            <div class="code-block">
+                → Upload form slides down<br>
+                → User fills in template details<br>
+                → User selects or drags file
+            </div>
+            
+            <h3>Step 2: File validation and preview</h3>
+            <div class="code-block">
+                → Validates file type and size<br>
+                → Shows file preview with details<br>
+                → Enables upload button
+            </div>
+            
+            <h3>Step 3: Upload and processing</h3>
+            <div class="code-block">
+                → Sends multipart form data to API<br>
+                → Saves file to templates directory<br>
+                → Updates templates registry<br>
+                → Returns success/error response
+            </div>
+            
+            <h3>Step 4: UI updates</h3>
+            <div class="code-block">
+                → Shows success notification<br>
+                → Hides upload form<br>
+                → Refreshes templates list<br>
+                → New template appears immediately
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🎯 Supported Document Types</h2>
+            <div class="code-block">
+                • <strong>Aadhaar Card:</strong> Indian identity document<br>
+                • <strong>PAN Card:</strong> Indian tax document<br>
+                • <strong>Driving License:</strong> Driving permits<br>
+                • <strong>Passport:</strong> International travel document<br>
+                • <strong>Corporate Document:</strong> Business documents<br>
+                • <strong>Other:</strong> Custom document types
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🚀 Testing the Feature</h2>
+            
+            <h3>To test the template upload:</h3>
+            <div class="code-block">
+                1. <strong>Restart your API:</strong> python Main.py<br>
+                2. <strong>Open your UI</strong> in the browser<br>
+                3. <strong>Click "Add Template"</strong> button<br>
+                4. <strong>Fill in the form:</strong><br>
+                   • Template Name: "My Custom Template"<br>
+                   • Document Type: Select from dropdown<br>
+                   • Description: Optional details<br>
+                   • File: Upload JPG/PNG/PDF/DOCX<br>
+                5. <strong>Click "Upload Template"</strong><br>
+                6. <strong>See the new template</strong> appear in the list!
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>✅ Complete Feature Set</h2>
+            <p><strong>Your template upload system now includes:</strong></p>
+            
+            <ul class="feature-list">
+                <li>Backend API endpoint for file uploads</li>
+                <li>Frontend form with validation</li>
+                <li>Drag & drop file upload</li>
+                <li>File type and size validation</li>
+                <li>Real-time file preview</li>
+                <li>Progress indicators and feedback</li>
+                <li>Error handling and notifications</li>
+                <li>Automatic template list refresh</li>
+                <li>Safe file naming and storage</li>
+                <li>Integration with existing template system</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>🎉 Ready to Use!</h2>
+            <p>The template upload feature is now fully implemented and ready for testing. Users can easily add new templates when they're not present in the system, making your document processing application more flexible and user-friendly!</p>
+        </div>
+    </div>
+</body>
+</html>

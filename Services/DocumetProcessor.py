@@ -1655,7 +1655,7 @@ class DocumentProcessor:
 
 
 def main():
-    input_path = "D:\\imageextractor\\identites\\React_Resume.pdf"
+    input_path = "D:\\imageextractor\\identites\\merged_docs.docx"
     api_key = API_KEY_1
 
     processor = DocumentProcessor(api_key=api_key)

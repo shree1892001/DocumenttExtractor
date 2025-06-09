@@ -1,0 +1,59 @@
+# Requirements for Document Processing API
+# Install with: pip install -r requirements_api.txt
+
+# FastAPI and web server
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
+
+# CORS support
+python-multipart>=0.0.6
+
+# Pydantic for data validation
+pydantic>=2.0.0
+
+# Document processing dependencies
+PyMuPDF>=1.23.0          # For PDF processing
+python-docx>=0.8.11      # For DOCX processing
+pdf2image>=1.16.0        # For scanned PDF processing
+
+# Image processing and OCR
+opencv-python>=4.6.0     # For image preprocessing
+numpy>=1.21.0            # For image processing
+Pillow>=9.0.0            # For image handling
+pytesseract>=0.3.10      # For OCR
+
+# Text processing
+regex>=2022.7.9          # For pattern matching
+
+# Optional: RoBERTa model dependencies (comment out for local-only)
+transformers>=4.21.0
+torch>=1.12.0
+tokenizers>=0.13.0
+
+# System dependencies (install separately):
+# For pdf2image:
+# Windows: Download and install poppler-utils
+# macOS: brew install poppler
+# Ubuntu/Debian: sudo apt-get install poppler-utils
+
+# For pytesseract OCR:
+# Windows: Download and install Tesseract-OCR
+# macOS: brew install tesseract
+# Ubuntu/Debian: sudo apt-get install tesseract-ocr
+
+# API Features:
+# ✅ Template management and display
+# ✅ Document upload (any format)
+# ✅ Template matching and classification
+# ✅ Data extraction with confidence scoring
+# ✅ Privacy protection options
+# ✅ CORS support for web UI
+# ✅ Error handling and validation
+# ✅ Health check endpoints
+
+# Usage:
+# 1. Install dependencies: pip install -r requirements_api.txt
+# 2. Run API server: python api/document_processing_api.py
+# 3. Open UI: Open ui/index.html in browser
+# 4. API will be available at: http://localhost:8000

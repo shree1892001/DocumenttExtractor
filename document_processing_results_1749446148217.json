@@ -1,0 +1,48 @@
+{
+  "timestamp": "2025-06-09T05:15:48.214Z",
+  "document_type": "driving license",
+  "template_matched": "driving_license",
+  "template_confidence": 0.95,
+  "extracted_data": {
+    "extracted_fields": {
+      "document_number": "5/0000/2010",
+      "issue_date": "2010-02-02",
+      "name": "SAMPLE PERSON",
+      "relation": "S/W/D of :SAMPLE PERSON",
+      "address": "SAMPLE ADDRESS LINE 1\nADDRESS LINE 2\nADDRESS LINE 3",
+      "date_of_birth": "1991-01-01",
+      "blood_group": "B+",
+      "license_type": "Non-Transport",
+      "valid_from": "2010-02-02",
+      "valid_to": "2030-01-02"
+    },
+    "confidence_scores": {
+      "document_number": 0.95,
+      "issue_date": 0.95,
+      "name": 0.95,
+      "relation": 0.95,
+      "address": 0.95,
+      "date_of_birth": 0.95,
+      "blood_group": 0.95,
+      "license_type": 0.95,
+      "valid_from": 0.95,
+      "valid_to": 0.95
+    },
+    "processing_metadata": {
+      "extraction_method": "document_processor3_service",
+      "model_used": "DocumentProcessor3",
+      "privacy_protected": true,
+      "template_matching": true,
+      "validation_level": "strict",
+      "processing_method": "ocr"
+    }
+  },
+  "file_info": {
+    "filename": "indian-license.jpg",
+    "file_format": ".jpg",
+    "file_size": 47665,
+    "processing_method": "ocr",
+    "processor_used": "DocumentProcessorService"
+  },
+  "privacy_protected": true
+}
