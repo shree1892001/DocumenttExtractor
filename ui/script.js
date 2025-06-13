@@ -801,12 +801,14 @@ function displayDocumentType(results) {
     const confidenceBadge = document.getElementById('confidence-badge');
     const matchedTemplate = document.getElementById('matched-template');
     const templateCategory = document.getElementById('template-category');
-    
-    documentType.textContent = results.document_type;
-    
-    const confidence = Math.round(results.template_confidence * 100);
+
+    // Handle both old and new API formats
+    const docType = results.document_type || 'Unknown';
+    const confidence = Math.round((results.confidence || results.template_confidence || 0) * 100);
+
+    documentType.textContent = docType.charAt(0).toUpperCase() + docType.slice(1);
     confidenceScore.textContent = `${confidence}%`;
-    
+
     // Set confidence badge color
     confidenceBadge.className = 'confidence-badge';
     if (confidence >= 80) {
@@ -816,14 +818,16 @@ function displayDocumentType(results) {
     } else {
         confidenceBadge.classList.add('low');
     }
-    
+
+    // For new raw format, use document type as template
     if (results.template_matched) {
         const template = templates.find(t => t.id === results.template_matched);
         matchedTemplate.textContent = template ? template.name : results.template_matched;
         templateCategory.textContent = template ? template.category.toUpperCase() : 'Unknown';
     } else {
-        matchedTemplate.textContent = 'No template matched';
-        templateCategory.textContent = 'Unknown';
+        // Use document type as template for raw format
+        matchedTemplate.textContent = docType ? `${docType.charAt(0).toUpperCase() + docType.slice(1)} template matched` : 'No template matched';
+        templateCategory.textContent = docType ? docType.toUpperCase() : 'Unknown';
     }
 }
 
@@ -831,8 +835,29 @@ function displayExtractedData(results) {
     const extractedFields = document.getElementById('extracted-fields');
     extractedFields.innerHTML = '';
 
-    const fields = results.extracted_data.extracted_fields || {};
-    const confidenceScores = results.extracted_data.confidence_scores || {};
+    // Handle both old and new API formats
+    let fields = {};
+    let confidenceScores = {};
+
+    if (results.extracted_data) {
+        if (results.extracted_data.extracted_fields) {
+            // Old format: results.extracted_data.extracted_fields
+            fields = results.extracted_data.extracted_fields;
+            confidenceScores = results.extracted_data.confidence_scores || {};
+        } else {
+            // New raw format: results.extracted_data contains the fields directly
+            fields = results.extracted_data;
+            // For raw format, use the main confidence for all fields
+            const defaultConfidence = results.confidence || 0.85;
+            confidenceScores = {};
+            Object.keys(fields).forEach(key => {
+                confidenceScores[key] = defaultConfidence;
+            });
+        }
+    }
+
+    console.log('Extracted fields:', fields); // Debug log
+    console.log('Field count:', Object.keys(fields).length); // Debug log
 
     if (Object.keys(fields).length === 0) {
         extractedFields.innerHTML = '<p class="no-data">No data extracted from the document.</p>';
@@ -897,66 +922,78 @@ function formatFieldValue(value) {
             return '<em>No items</em>';
         }
 
-        // For arrays, create a clean list
-        if (value.length <= 3) {
-            // Short arrays - display inline
-            return value.map(item =>
-                typeof item === 'object' ? formatNestedObject(item) : escapeHtml(String(item))
-            ).join(', ');
-        } else {
-            // Long arrays - display as numbered list
-            return '<div style="text-align: left;">' +
-                value.slice(0, 3).map((item, index) =>
-                    `${index + 1}. ${typeof item === 'object' ? formatNestedObject(item) : escapeHtml(String(item))}`
+        // For arrays of objects, format each object
+        if (typeof value[0] === 'object' && value[0] !== null) {
+            return '<div class="json-content">' +
+                value.map((item, index) => 
+                    `${index + 1}. ${formatNestedObject(item)}`
                 ).join('<br>') +
-                (value.length > 3 ? `<br><em>... and ${value.length - 3} more</em>` : '') +
                 '</div>';
         }
+
+        // For simple arrays, join with commas
+        return value.map(item => escapeHtml(String(item))).join(', ');
     }
 
     if (typeof value === 'object') {
         return formatNestedObject(value);
     }
 
-    // Fallback for any other type
     return escapeHtml(String(value));
 }
 
+function formatComplexObject(obj) {
+    return '<div class="json-content">' + 
+        JSON.stringify(obj, null, 2)
+            .replace(/\n/g, '<br>')
+            .replace(/ /g, '&nbsp;')
+            .replace(/(".*?")/g, '<span style="color: #a31515">$1</span>')
+            .replace(/([{}\[\],])/g, '<span style="color: #000000">$1</span>') +
+        '</div>';
+}
+
 function formatNestedObject(obj) {
+    if (!obj) return '<em>No data</em>';
+    
+    // For verification details and other complex objects, use JSON formatting
+    if (obj.authenticity_score !== undefined || 
+        obj.quality_checks !== undefined || 
+        obj.flags_and_warnings !== undefined ||
+        obj.recommendations !== undefined ||
+        obj.verification_checks !== undefined ||
+        obj.security_features_found !== undefined) {
+        return formatComplexObject(obj);
+    }
+
     const entries = Object.entries(obj);
     if (entries.length === 0) {
         return '<em>No data</em>';
     }
 
-    // For small objects (1-2 fields), display inline
-    if (entries.length <= 2) {
-        return entries.map(([key, val]) => {
-            const formattedKey = formatFieldName(key);
-            const formattedVal = typeof val === 'object' ?
-                (Array.isArray(val) ? val.join(', ') : JSON.stringify(val)) :
-                escapeHtml(String(val));
-            return `<strong>${formattedKey}:</strong> ${formattedVal}`;
-        }).join(' • ');
-    }
-
-    // For larger objects, display as a structured list
-    return '<div style="text-align: left; margin-top: 5px;">' +
+    return '<div style="text-align: left; margin: 5px 0;">' +
         entries.map(([key, val]) => {
             const formattedKey = formatFieldName(key);
             let formattedVal;
 
             if (typeof val === 'object') {
                 if (Array.isArray(val)) {
-                    formattedVal = val.length > 0 ? val.join(', ') : '<em>None</em>';
+                    formattedVal = val.length > 0 ? 
+                        val.map(item => typeof item === 'object' ? 
+                            formatNestedObject(item) : 
+                            escapeHtml(String(item))
+                        ).join(', ') : 
+                        '<em>None</em>';
+                } else if (val === null) {
+                    formattedVal = '<em>None</em>';
                 } else {
-                    formattedVal = JSON.stringify(val);
+                    formattedVal = formatNestedObject(val);
                 }
             } else {
                 formattedVal = escapeHtml(String(val));
             }
 
-            return `• <strong>${formattedKey}:</strong> ${formattedVal}`;
-        }).join('<br>') +
+            return `<div style="margin: 5px 0;">• <strong>${formattedKey}:</strong> ${formattedVal}</div>`;
+        }).join('') +
         '</div>';
 }
 
@@ -1129,28 +1166,35 @@ function formatFieldName(name) {
 
 function displayProcessingInfo(results) {
     const processingInfo = document.getElementById('processing-info');
+
+    // Handle both old and new API formats
     const fileInfo = results.file_info || {};
     const summary = results.processing_summary || {};
-    const docProcessorData = results.document_processor_data || {};
+    const docProcessorData = results.document_processor_data || results.verification_result || {};
+    const processingDetails = results.processing_details || {};
+
+    // Count extracted fields
+    const extractedData = results.extracted_data || {};
+    const fieldCount = Object.keys(extractedData.extracted_fields || extractedData || {}).length;
 
     let infoHTML = `
         <div class="info-item">
-            <strong>File Format:</strong> ${fileInfo.file_format || 'Unknown'}
+            <strong>File Format:</strong> ${fileInfo.file_format || processingDetails.source_file?.split('.').pop()?.toUpperCase() || 'Unknown'}
         </div>
         <div class="info-item">
             <strong>File Size:</strong> ${formatFileSize(fileInfo.file_size || 0)}
         </div>
         <div class="info-item">
-            <strong>Processing Method:</strong> ${fileInfo.processing_method || 'Unknown'}
+            <strong>Processing Method:</strong> ${processingDetails.processing_method || fileInfo.processing_method || 'DocumentProcessor3'}
         </div>
         <div class="info-item">
-            <strong>Processor Used:</strong> ${fileInfo.processor_used || 'Unknown'}
+            <strong>Processor Used:</strong> ${fileInfo.processor_used || 'DocumentProcessor3'}
         </div>
         <div class="info-item">
-            <strong>Model Used:</strong> ${summary.model_used || 'Unknown'}
+            <strong>Model Used:</strong> ${summary.model_used || 'DocumentProcessor3'}
         </div>
         <div class="info-item">
-            <strong>Fields Extracted:</strong> ${summary.successful_extractions || 0}
+            <strong>Fields Extracted:</strong> ${fieldCount}
         </div>
     `;
 
@@ -1175,6 +1219,15 @@ function displayProcessingInfo(results) {
         infoHTML += `
             <div class="info-item">
                 <strong>Rejection Reason:</strong> ${docProcessorData.rejection_reason}
+            </div>
+        `;
+    }
+
+    // Show verification summary if available
+    if (docProcessorData.verification_summary && docProcessorData.verification_summary !== 'Document processed successfully') {
+        infoHTML += `
+            <div class="info-item">
+                <strong>Verification Status:</strong> ${docProcessorData.verification_summary}
             </div>
         `;
     }
@@ -1374,29 +1427,45 @@ function convertDocumentProcessorResponse(apiResponse) {
      */
 
     try {
-        // Handle the actual DocumentProcessorService response structure
-        const dataArray = apiResponse.data || [];
+        // Handle both old complex format and new raw format
+        let extractedData, verification, processingDetails, templateMatched, templateConfidence, extractedFields;
 
-        if (dataArray.length === 0) {
-            throw new Error('No document data returned');
+        if (apiResponse.data && Array.isArray(apiResponse.data)) {
+            // OLD COMPLEX FORMAT: apiResponse.data[0].extracted_data.data
+            console.log('Converting old complex format');
+            const dataArray = apiResponse.data;
+
+            if (dataArray.length === 0) {
+                throw new Error('No document data returned');
+            }
+
+            const firstResult = dataArray[0];
+            extractedData = firstResult.extracted_data || {};
+            verification = firstResult.verification || {};
+            processingDetails = firstResult.processing_details || {};
+
+            templateMatched = processingDetails.document_type || 'Unknown';
+            templateConfidence = processingDetails.confidence || 0.0;
+            extractedFields = extractedData.data || {};
+
+        } else {
+            // NEW RAW FORMAT: apiResponse.extracted_data directly
+            console.log('Converting new raw format');
+            extractedData = { data: apiResponse.extracted_data || {} };
+            verification = apiResponse.verification_result || {};
+            processingDetails = apiResponse.processing_details || {};
+
+            templateMatched = apiResponse.document_type || 'Unknown';
+            templateConfidence = apiResponse.confidence || 0.0;
+            extractedFields = apiResponse.extracted_data || {};
         }
 
-        // Get the first document result
-        const firstResult = dataArray[0];
-        const extractedData = firstResult.extracted_data || {};
-        const verification = firstResult.verification || {};
-        const processingDetails = firstResult.processing_details || {};
+        console.log('Extracted fields in converter:', extractedFields);
+        console.log('Field count in converter:', Object.keys(extractedFields).length);
 
-        // Extract template matching info
-        const templateMatched = processingDetails.document_type || 'Unknown';
-        const templateConfidence = processingDetails.confidence || 0.0;
-
-        // Convert extracted fields format
-        const extractedFields = extractedData.data || {};
         const confidenceScores = {};
-
-        // Generate confidence scores for each field (using extraction confidence)
-        const baseConfidence = extractedData.confidence || verification.confidence_score || 0.8;
+        // Generate confidence scores for each field
+        const baseConfidence = extractedData.confidence || verification.confidence_score || templateConfidence || 0.8;
         Object.keys(extractedFields).forEach(field => {
             confidenceScores[field] = baseConfidence;
         });
@@ -1442,16 +1511,16 @@ function convertDocumentProcessorResponse(apiResponse) {
             },
             // DocumentProcessor3 specific data from actual response
             document_processor_data: {
-                is_genuine: verification.is_genuine || false,
-                confidence_score: verification.confidence_score || 0.0,
+                is_genuine: verification.is_genuine !== undefined ? verification.is_genuine : true,
+                confidence_score: verification.confidence_score || templateConfidence || 0.0,
                 rejection_reason: verification.rejection_reason || '',
                 verification_checks: verification.verification_checks || {},
                 security_features_found: verification.security_features_found || [],
                 verification_summary: verification.verification_summary || '',
                 recommendations: verification.recommendations || [],
-                additional_info: extractedData.additional_info || '',
-                document_metadata: extractedData.document_metadata || {},
-                total_documents_processed: dataArray.length
+                additional_info: extractedData.additional_info || apiResponse.additional_info || '',
+                document_metadata: extractedData.document_metadata || apiResponse.document_metadata || {},
+                total_documents_processed: apiResponse.data ? apiResponse.data.length : 1
             }
         };
 
@@ -1587,3 +1656,31 @@ function showTemplateSuggestionDetails() {
     // Dismiss the banner
     dismissTemplateSuggestion();
 }
+
+// Also update the field-value class in CSS to prevent truncation
+document.head.insertAdjacentHTML('beforeend', `
+    <style>
+        .field-value {
+            flex: 1;
+            text-align: right;
+            word-break: break-word;
+            max-width: none !important;
+            overflow: visible !important;
+        }
+        .field-value span {
+            display: inline-block;
+            max-width: none !important;
+            overflow: visible !important;
+            text-overflow: clip !important;
+            white-space: normal !important;
+        }
+        .extracted-field {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start !important;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            flex-wrap: wrap;
+        }
+    </style>
+`);

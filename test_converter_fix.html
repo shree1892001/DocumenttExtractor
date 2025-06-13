@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Converter Fix</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        pre { background: #f8f9fa; padding: 10px; overflow-x: auto; font-size: 12px; }
+        button { padding: 10px 20px; margin: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Test Converter Fix</h1>
+    
+    <div class="test-section info">
+        <h3>Testing convertDocumentProcessorResponse Function</h3>
+        <button onclick="testOldFormat()">Test Old Format</button>
+        <button onclick="testNewFormat()">Test New Raw Format</button>
+        <button onclick="testBothFormats()">Test Both Formats</button>
+    </div>
+    
+    <div id="test-results"></div>
+    
+    <script>
+        // Copy the updated convertDocumentProcessorResponse function
+        function convertDocumentProcessorResponse(apiResponse) {
+            try {
+                // Handle both old complex format and new raw format
+                let extractedData, verification, processingDetails, templateMatched, templateConfidence, extractedFields;
+                
+                if (apiResponse.data && Array.isArray(apiResponse.data)) {
+                    // OLD COMPLEX FORMAT: apiResponse.data[0].extracted_data.data
+                    console.log('Converting old complex format');
+                    const dataArray = apiResponse.data;
+                    
+                    if (dataArray.length === 0) {
+                        throw new Error('No document data returned');
+                    }
+                    
+                    const firstResult = dataArray[0];
+                    extractedData = firstResult.extracted_data || {};
+                    verification = firstResult.verification || {};
+                    processingDetails = firstResult.processing_details || {};
+                    
+                    templateMatched = processingDetails.document_type || 'Unknown';
+                    templateConfidence = processingDetails.confidence || 0.0;
+                    extractedFields = extractedData.data || {};
+                    
+                } else {
+                    // NEW RAW FORMAT: apiResponse.extracted_data directly
+                    console.log('Converting new raw format');
+                    extractedData = { data: apiResponse.extracted_data || {} };
+                    verification = apiResponse.verification_result || {};
+                    processingDetails = apiResponse.processing_details || {};
+                    
+                    templateMatched = apiResponse.document_type || 'Unknown';
+                    templateConfidence = apiResponse.confidence || 0.0;
+                    extractedFields = apiResponse.extracted_data || {};
+                }
+
+                console.log('Extracted fields in converter:', extractedFields);
+                console.log('Field count in converter:', Object.keys(extractedFields).length);
+
+                const confidenceScores = {};
+                // Generate confidence scores for each field
+                const baseConfidence = extractedData.confidence || verification.confidence_score || templateConfidence || 0.8;
+                Object.keys(extractedFields).forEach(field => {
+                    confidenceScores[field] = baseConfidence;
+                });
+
+                // Build our expected format
+                return {
+                    status: apiResponse.status === 'success' ? 'success' : 'error',
+                    document_type: templateMatched,
+                    template_matched: templateMatched.toLowerCase().replace(/\s+/g, '_'),
+                    template_confidence: templateConfidence,
+                    privacy_protected: true,
+                    extracted_data: {
+                        extracted_fields: extractedFields,
+                        confidence_scores: confidenceScores
+                    }
+                };
+
+            } catch (error) {
+                console.error('Error converting DocumentProcessor response:', error);
+                return {
+                    status: 'error',
+                    error_message: 'Failed to process response',
+                    document_type: 'Unknown',
+                    extracted_data: { extracted_fields: {}, confidence_scores: {} }
+                };
+            }
+        }
+        
+        function testOldFormat() {
+            const oldFormatData = {
+                "status": "success",
+                "message": "Successfully processed 1 documents",
+                "data": [
+                    {
+                        "extracted_data": {
+                            "data": {
+                                "Name": "SRIKRISHNAN NADAR SIVA SELVA KUMAR",
+                                "Document Number": "H1591116",
+                                "Date of Birth": "1976-05-04"
+                            },
+                            "confidence": 0.85
+                        },
+                        "verification": {
+                            "is_genuine": true,
+                            "confidence_score": 0.88
+                        },
+                        "processing_details": {
+                            "document_type": "passport",
+                            "confidence": 0.92
+                        }
+                    }
+                ]
+            };
+            
+            const result = convertDocumentProcessorResponse(oldFormatData);
+            displayTestResult('Old Format Test', oldFormatData, result);
+        }
+        
+        function testNewFormat() {
+            const newFormatData = {
+                "status": "success",
+                "message": "Document processed successfully",
+                "document_type": "passport",
+                "confidence": 0.95,
+                "extracted_data": {
+                    "Name": "SRIKRISHNAN NADAR SIVA SELVA KUMAR",
+                    "First Name": "SIVA SELVA KUMAR",
+                    "Document Number": "H1591116",
+                    "Date of Birth": "1976-05-04",
+                    "Nationality": "INDIAN"
+                },
+                "verification_result": {
+                    "is_genuine": false,
+                    "confidence_score": 0.95,
+                    "rejection_reason": "suspicious"
+                },
+                "processing_details": {
+                    "source_file": "passport.jpg",
+                    "processing_method": "unified_prompt"
+                }
+            };
+            
+            const result = convertDocumentProcessorResponse(newFormatData);
+            displayTestResult('New Raw Format Test', newFormatData, result);
+        }
+        
+        function testBothFormats() {
+            testOldFormat();
+            testNewFormat();
+        }
+        
+        function displayTestResult(testName, input, output) {
+            const resultsDiv = document.getElementById('test-results');
+            
+            const extractedFields = output.extracted_data?.extracted_fields || {};
+            const fieldCount = Object.keys(extractedFields).length;
+            const isSuccess = fieldCount > 0;
+            
+            const testDiv = document.createElement('div');
+            testDiv.className = `test-section ${isSuccess ? 'success' : 'error'}`;
+            
+            testDiv.innerHTML = `
+                <h3>${isSuccess ? '✅' : '❌'} ${testName}</h3>
+                <p><strong>Status:</strong> ${isSuccess ? 'PASSED' : 'FAILED'}</p>
+                <p><strong>Fields Extracted:</strong> ${fieldCount}</p>
+                <p><strong>Document Type:</strong> ${output.document_type}</p>
+                <p><strong>Confidence:</strong> ${(output.template_confidence * 100).toFixed(0)}%</p>
+                
+                ${fieldCount > 0 ? `
+                    <p><strong>Sample Fields:</strong></p>
+                    <ul>
+                        ${Object.entries(extractedFields).slice(0, 3).map(([key, value]) => 
+                            `<li><strong>${key}:</strong> ${value}</li>`
+                        ).join('')}
+                    </ul>
+                ` : '<p><strong>❌ No fields extracted - UI would show "No data extracted"</strong></p>'}
+                
+                <details>
+                    <summary>Input Data</summary>
+                    <pre>${JSON.stringify(input, null, 2)}</pre>
+                </details>
+                
+                <details>
+                    <summary>Output Data</summary>
+                    <pre>${JSON.stringify(output, null, 2)}</pre>
+                </details>
+            `;
+            
+            resultsDiv.appendChild(testDiv);
+        }
+        
+        // Auto-run tests on page load
+        window.onload = function() {
+            testBothFormats();
+        };
+    </script>
+</body>
+</html>

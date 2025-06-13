@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-
+from DocumenttExtractor.Common.constants import *
 import fitz
 import tempfile
 from typing import List, Dict, Any, Optional, Tuple
@@ -13,9 +13,9 @@ import google.generativeai as genai
 from PIL import Image
 import pytesseract
 import traceback
-from Extractor.ImageExtractor import ImageTextExtractor
-from Extractor.Paddle import flatten_json
-from Factories.DocumentFactory import (
+from DocumenttExtractor.Extractor.ImageExtractor import ImageTextExtractor
+from DocumenttExtractor.Extractor.Paddle import flatten_json
+from DocumenttExtractor.Factories.DocumentFactory import (
     DocumentExtractorFactory,
     DocumentExtractor,
     TextExtractorFactory,
@@ -26,20 +26,15 @@ from Factories.DocumentFactory import (
     TextExtractor
 )
 
-# Global flag for python-docx availability
 try:
     from docx import Document
     DOCX_AVAILABLE = True
 except ImportError as e:
     DOCX_AVAILABLE = False
-    Document = None  # Set to None so we can check later
-    logger.warning(f"python-docx not available - DOCX processing will be limited: {str(e)}")
+    Document = None
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Constants
-
 
 @dataclass
 class DocumentInfo:
@@ -50,9 +45,10 @@ class DocumentInfo:
 
 class BaseTextExtractor(ABC):
     def __init__(self, api_key: str):
+        from DocumenttExtractor.Common.gemini_config import GeminiConfig
         self.api_key = api_key
-        genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel('gemini-1.5-flash')
+        self.config = GeminiConfig.create_vision_processor_config(api_key)
+        self.model = self.config.get_model()
 
     @abstractmethod
     def extract_text(self, file_path: str) -> str:
@@ -60,9 +56,10 @@ class BaseTextExtractor(ABC):
 
 class TextProcessor:
     def __init__(self, api_key: str):
+        from DocumenttExtractor.Common.gemini_config import GeminiConfig
         self.api_key = api_key
-        genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel('gemini-1.5-flash')
+        self.config = GeminiConfig.create_text_processor_config(api_key)
+        self.model = self.config.get_model()
 
     def process_text(self, text: str, prompt: str) -> str:
         """Process text using Gemini without image handling"""
@@ -74,32 +71,29 @@ class TextProcessor:
             raise
 
 class DocumentProcessor:
-    def __init__(self, api_key: str, templates_dir: str = "D:\\imageextractor\\identites\\Templates"):
+    def __init__(self, api_key: str, templates_dir: str = TEMPLATES_DIR):
         try:
             self.api_key = api_key
             self.templates_dir = templates_dir
-            
-            # Test Document import early to catch any import issues
+
             try:
                 doc_test = Document()
                 logger.info("Successfully initialized python-docx")
             except Exception as e:
                 logger.warning(f"Warning: python-docx initialization failed: {str(e)}")
-            
-            # Initialize text processing components
+
             self.text_processor = TextProcessor(api_key)
             self.text_extractor = TextExtractor(api_key)
-            
-            # Initialize Gemini models
+
             try:
-                genai.configure(api_key=api_key)
-                self.gemini_vision_model = genai.GenerativeModel('gemini-pro-vision')
-                self.gemini_text_model = genai.GenerativeModel('gemini-pro')
+                from DocumenttExtractor.Common.gemini_config import initialize_global_config
+                self.gemini_config = initialize_global_config(api_key=api_key, model_type="text")
+                logger.info("Gemini configuration initialized successfully")
+
             except Exception as e:
                 logger.error(f"Error initializing Gemini models: {str(e)}")
                 raise RuntimeError(f"Gemini initialization failed: {str(e)}")
-                
-            # Initialize Pytesseract
+
             try:
                 version = pytesseract.get_tesseract_version()
                 logger.info(f"Tesseract version: {version}")
@@ -107,41 +101,17 @@ class DocumentProcessor:
                 logger.error(f"Error initializing Pytesseract: {str(e)}")
                 raise RuntimeError(f"Pytesseract initialization failed: {str(e)}")
 
-            # Initialize document categories
-            self.document_categories = {
-                'identity': [
-                    'passport', 'national_id', 'drivers_license', 'residence_permit',
-                    'citizenship_card', 'voter_id', 'aadhaar_card', 'pan_card'
-                ],
-                'legal': [
-                    'contract', 'agreement', 'deed', 'power_of_attorney',
-                    'court_order', 'legal_notice', 'affidavit', 'will'
-                ],
-                'financial': [
-                    'bank_statement', 'tax_return', 'invoice', 'receipt',
-                    'credit_card_statement', 'loan_document', 'insurance_policy'
-                ],
-                'educational': [
-                    'degree_certificate', 'diploma', 'transcript', 'report_card',
-                    'scholarship_document', 'academic_certificate'
-                ],
-                'medical': [
-                    'medical_report', 'prescription', 'health_insurance',
-                    'vaccination_record', 'medical_certificate'
-                ],
-                'business': [
-                    'business_license', 'incorporation_document', 'tax_registration',
-                    'commercial_invoice', 'shipping_document'
-                ],
-                'other': []  # For uncategorized document types
-            }
+            self.document_categories = DOCUMENT_CATEGORIES
 
-            # Initialize document patterns
-            self.document_patterns = self._initialize_document_patterns()
+            self.document_patterns = DOCUMENT_PATTERNS
             self.compiled_patterns = {
                 doc_type: [re.compile(pattern) for pattern in patterns]
                 for doc_type, patterns in self.document_patterns.items()
             }
+
+            # Enable unified processing directly in DocumentProcessor3
+            self.use_unified_processing = True
+            logger.info("Unified document processing enabled in DocumentProcessor3")
 
         except Exception as e:
             logger.error(f"Error initializing DocumentProcessor: {str(e)}")
@@ -155,34 +125,667 @@ class DocumentProcessor:
             logger.error(f"Error creating text processor: {str(e)}")
             raise RuntimeError(f"Text processor creation failed: {str(e)}")
 
+    def process_with_unified_prompt(self, text: str, source_file: str = None, min_confidence: float = 0.0) -> Optional[Dict[str, Any]]:
+        """
+        Process document using the unified prompt for optimized single-pass processing
+
+        Args:
+            text: Document text to process
+            source_file: Source file path (optional)
+            min_confidence: Minimum confidence threshold
+
+        Returns:
+            Processed document result or None if processing fails
+        """
+        if not self.use_unified_processing or not self.unified_processor:
+            logger.warning("Unified processing not available, falling back to legacy processing")
+            return self._process_text_content(text, source_file or "unknown", min_confidence)
+
+        try:
+            logger.info("Processing document with unified prompt")
+
+            # Add context for better processing
+            context = {
+                "source_file": source_file or "unknown",
+                "min_confidence_threshold": min_confidence,
+                "processing_mode": "comprehensive"
+            }
+
+            # Process with unified prompt
+            result = self.unified_processor.process_document(text, context)
+
+            # Convert unified result to legacy format for compatibility
+            legacy_result = self._convert_unified_to_legacy_format(result, source_file, min_confidence)
+
+            logger.info(f"Unified processing completed - Document type: {legacy_result.get('document_type', 'unknown')}")
+            return legacy_result
+
+        except Exception as e:
+            logger.error(f"Error in unified processing: {str(e)}")
+            logger.info("Falling back to legacy processing")
+            return self._process_text_content(text, source_file or "unknown", min_confidence)
+
+    def _convert_unified_to_legacy_format(self, unified_result: Dict[str, Any], source_file: str, min_confidence: float) -> Dict[str, Any]:
+        """
+        Convert unified processing result to legacy format for backward compatibility
+
+        Args:
+            unified_result: Result from unified processor
+            source_file: Source file path
+            min_confidence: Minimum confidence threshold
+
+        Returns:
+            Legacy format result
+        """
+        try:
+            # Extract key information from unified result
+            doc_analysis = unified_result.get("document_analysis", {})
+            extracted_data = unified_result.get("extracted_data", {})
+            verification = unified_result.get("verification_results", {})
+            metadata = unified_result.get("processing_metadata", {})
+
+            # Determine status based on verification and confidence
+            confidence = doc_analysis.get("confidence_score", 0.0)
+            is_genuine = verification.get("authenticity_assessment", {}).get("is_likely_genuine", False)
+
+            if confidence < min_confidence:
+                status = "rejected"
+                rejection_reason = f"Confidence {confidence:.2f} below threshold {min_confidence}"
+            elif not is_genuine:
+                status = "rejected"
+                rejection_reason = verification.get("authenticity_assessment", {}).get("verification_status", "Failed authenticity check")
+            else:
+                status = "success"
+                rejection_reason = None
+
+            # Flatten extracted data for legacy compatibility
+            flattened_data = self._flatten_extracted_data(extracted_data)
+
+            # Create legacy format result
+            legacy_result = {
+                "status": status,
+                "document_type": doc_analysis.get("document_type", "unknown"),
+                "source_file": source_file,
+                "confidence": confidence,
+                "extracted_data": {
+                    "data": flattened_data,
+                    "confidence": confidence,
+                    "additional_info": metadata.get("processing_notes", "Processed with unified prompt"),
+                    "document_metadata": {
+                        "type": doc_analysis.get("document_type", "unknown"),
+                        "category": doc_analysis.get("document_category", "unknown"),
+                        "issuing_authority": doc_analysis.get("issuing_authority", "unknown"),
+                        "key_indicators": doc_analysis.get("key_indicators", [])
+                    }
+                },
+                "verification_status": verification.get("authenticity_assessment", {}).get("verification_status", "unknown"),
+                "processing_method": "unified_prompt",
+                "validation_level": "comprehensive"
+            }
+
+            # Add rejection reason if applicable
+            if rejection_reason:
+                legacy_result["rejection_reason"] = rejection_reason
+
+            # Add verification details
+            if verification:
+                legacy_result["verification_details"] = {
+                    "authenticity_score": verification.get("authenticity_assessment", {}).get("confidence_score", 0.0),
+                    "quality_checks": verification.get("quality_checks", {}),
+                    "flags_and_warnings": verification.get("flags_and_warnings", []),
+                    "recommendations": verification.get("recommendations", [])
+                }
+
+            return legacy_result
+
+        except Exception as e:
+            logger.error(f"Error converting unified result to legacy format: {str(e)}")
+            # Return minimal legacy result on error
+            return {
+                "status": "error",
+                "document_type": "unknown",
+                "source_file": source_file,
+                "confidence": 0.0,
+                "extracted_data": {
+                    "data": {},
+                    "confidence": 0.0,
+                    "additional_info": f"Error converting result: {str(e)}",
+                    "document_metadata": {"type": "unknown", "category": "error"}
+                },
+                "processing_method": "unified_prompt",
+                "validation_level": "error"
+            }
+
+    def _flatten_extracted_data(self, extracted_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Flatten the structured extracted data for legacy compatibility
+
+        Args:
+            extracted_data: Structured data from unified processor
+
+        Returns:
+            Flattened data dictionary
+        """
+        flattened = {}
+
+        # Debug logging
+        logger.info(f"Flattening extracted data with keys: {list(extracted_data.keys()) if extracted_data else 'None'}")
+
+        try:
+            # Personal information
+            personal_info = extracted_data.get("personal_information", {})
+            if personal_info:
+                flattened.update({
+                    "Name": personal_info.get("full_name") or personal_info.get("name"),
+                    "First Name": personal_info.get("first_name"),
+                    "Last Name": personal_info.get("last_name"),
+                    "Date of Birth": personal_info.get("date_of_birth"),
+                    "Gender": personal_info.get("gender"),
+                    "Nationality": personal_info.get("nationality")
+                })
+
+                # Address information
+                address = personal_info.get("address", {})
+                if isinstance(address, dict):
+                    flattened["Address"] = address.get("full_address")
+                    flattened["Street"] = address.get("street")
+                    flattened["City"] = address.get("city")
+                    flattened["State"] = address.get("state")
+                    flattened["Postal Code"] = address.get("postal_code")
+                    flattened["Country"] = address.get("country")
+                elif isinstance(address, str):
+                    flattened["Address"] = address
+
+            # Document identifiers
+            doc_ids = extracted_data.get("document_identifiers", {})
+            if doc_ids:
+                flattened.update({
+                    "Document Number": doc_ids.get("primary_number"),
+                    "Secondary Numbers": doc_ids.get("secondary_numbers"),
+                    "Barcode Data": doc_ids.get("barcode_data"),
+                    "QR Code Data": doc_ids.get("qr_code_data")
+                })
+
+            # Validity information
+            validity = extracted_data.get("validity_information", {})
+            if validity:
+                flattened.update({
+                    "Issue Date": validity.get("issue_date"),
+                    "Expiry Date": validity.get("expiry_date"),
+                    "Valid From": validity.get("valid_from"),
+                    "Valid Until": validity.get("valid_until"),
+                    "Status": validity.get("status")
+                })
+
+            # Document-specific fields
+            doc_specific = extracted_data.get("document_specific_fields", {})
+            if doc_specific:
+                flattened.update(doc_specific)
+
+            # Additional information
+            additional = extracted_data.get("additional_information", {})
+            if additional:
+                flattened.update({
+                    "Signatures Present": additional.get("signatures_present"),
+                    "Photos Present": additional.get("photos_present"),
+                    "Official Seals": additional.get("official_seals"),
+                    "Watermarks": additional.get("watermarks"),
+                    "Other Features": additional.get("other_features")
+                })
+
+            # If no structured data was found, try to extract from any available data
+            if not flattened and extracted_data:
+                logger.info("No structured data found, attempting to extract from raw data")
+                # Try to extract from any top-level fields
+                for key, value in extracted_data.items():
+                    if isinstance(value, (str, int, float)) and value:
+                        # Convert key to title case for consistency
+                        formatted_key = key.replace('_', ' ').title()
+                        flattened[formatted_key] = value
+                    elif isinstance(value, dict):
+                        # Flatten nested dictionaries
+                        for nested_key, nested_value in value.items():
+                            if isinstance(nested_value, (str, int, float)) and nested_value:
+                                formatted_key = f"{key.replace('_', ' ').title()} {nested_key.replace('_', ' ').title()}"
+                                flattened[formatted_key] = nested_value
+
+            # Clean up null/empty values and convert string nulls to actual nulls
+            cleaned_flattened = {}
+            for key, value in flattened.items():
+                # Skip null, empty, or "not_present" values
+                if value is None:
+                    continue
+                elif isinstance(value, str):
+                    if value.lower() in ['null', 'not_present', 'n/a', 'none', '']:
+                        continue
+                    else:
+                        cleaned_flattened[key] = value
+                elif isinstance(value, list):
+                    if value:  # Only include non-empty lists
+                        cleaned_flattened[key] = value
+                elif value:  # Include any other truthy values
+                    cleaned_flattened[key] = value
+
+            # Debug logging
+            logger.info(f"Flattened data result (before cleaning): {flattened}")
+            logger.info(f"Cleaned flattened data result: {cleaned_flattened}")
+
+            return cleaned_flattened
+
+        except Exception as e:
+            logger.error(f"Error flattening extracted data: {str(e)}")
+            return {"error": f"Failed to flatten data: {str(e)}"}
+
+    def _process_with_unified_prompt(self, text: str, source_file: str, min_confidence: float) -> Optional[Dict[str, Any]]:
+        """
+        Process document using the unified prompt approach directly in DocumentProcessor3
+
+        Args:
+            text: Document text to process
+            source_file: Source file path
+            min_confidence: Minimum confidence threshold
+
+        Returns:
+            Processed document result
+        """
+        try:
+            logger.info("Processing document with unified prompt")
+
+            # Prepare the unified prompt with the text
+            from DocumenttExtractor.Common.constants import UNIFIED_DOCUMENT_PROCESSING_PROMPT
+            prompt = UNIFIED_DOCUMENT_PROCESSING_PROMPT.format(text=text)
+
+            # Add context for better processing
+            context_info = f"""
+
+**ADDITIONAL CONTEXT**:
+- source_file: {source_file}
+- min_confidence_threshold: {min_confidence}
+- processing_mode: comprehensive
+"""
+            prompt += context_info
+
+            # Process with the unified prompt
+            logger.info(f"Processing document text ({len(text)} characters)")
+            logger.debug(f"Prompt length: {len(prompt)} characters")
+
+            try:
+                response = self.text_processor.process_text(text, prompt)
+                logger.debug(f"Received response length: {len(response) if response else 0}")
+            except Exception as e:
+                logger.error(f"Error calling text processor: {str(e)}")
+                raise RuntimeError(f"Text processor failed: {str(e)}")
+
+            # Check if response is empty or None
+            if not response or not response.strip():
+                logger.error("Received empty response from text processor")
+                raise ValueError("AI model returned empty response")
+
+            # Clean and parse the JSON response
+            try:
+                # Clean the response - remove markdown formatting and extra whitespace
+                cleaned_response = self._clean_json_response(response)
+                logger.debug(f"Cleaned response length: {len(cleaned_response)}")
+
+                if not cleaned_response:
+                    logger.error("Response became empty after cleaning")
+                    raise ValueError("Response became empty after cleaning")
+
+                result = json.loads(cleaned_response)
+
+                # Debug logging to see what we got from the AI
+                logger.info(f"Unified processing raw result keys: {list(result.keys())}")
+                if "extracted_data" in result:
+                    logger.info(f"Extracted data keys: {list(result['extracted_data'].keys())}")
+                else:
+                    logger.warning("No 'extracted_data' key in unified result")
+
+                # Validate the response structure
+                if not self._validate_unified_response_structure(result):
+                    logger.warning("Response structure validation failed, attempting to fix")
+                    result = self._fix_unified_response_structure(result)
+
+                # Convert unified result to legacy format for compatibility
+                legacy_result = self._convert_unified_to_legacy_format(result, source_file, min_confidence)
+
+                # Debug logging for legacy result
+                logger.info(f"Legacy result extracted data: {legacy_result.get('extracted_data', {}).get('data', {})}")
+                if not legacy_result.get('extracted_data', {}).get('data'):
+                    logger.warning("No extracted data in legacy result - checking original unified result")
+                    logger.info(f"Original unified extracted_data: {result.get('extracted_data', {})}")
+
+                logger.info(f"Unified processing completed - Document type: {legacy_result.get('document_type', 'unknown')}")
+                return legacy_result
+
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse JSON response: {str(e)}")
+                logger.error(f"Raw response (first 500 chars): {response[:500]}")
+
+                # Try to extract JSON from the response if it's embedded in text
+                extracted_json = self._extract_json_from_text(response)
+                if extracted_json:
+                    try:
+                        result = json.loads(extracted_json)
+                        logger.info("Successfully extracted JSON from text response")
+
+                        # Validate and fix structure
+                        if not self._validate_unified_response_structure(result):
+                            result = self._fix_unified_response_structure(result)
+
+                        # Convert to legacy format
+                        legacy_result = self._convert_unified_to_legacy_format(result, source_file, min_confidence)
+                        return legacy_result
+                    except json.JSONDecodeError:
+                        logger.error("Failed to parse extracted JSON as well")
+
+                # Try fallback with simpler prompt
+                logger.warning("Unified prompt failed, trying fallback approach")
+                fallback_result = self._process_with_fallback_prompt(text, source_file, min_confidence)
+                if fallback_result:
+                    return fallback_result
+
+                raise ValueError(f"Failed to parse AI response as JSON: {str(e)}")
+
+        except Exception as e:
+            logger.error(f"Error in unified processing: {str(e)}")
+            raise RuntimeError(f"Unified document processing failed: {str(e)}")
+
+    def set_unified_processing(self, enabled: bool):
+
+        self.use_unified_processing = enabled
+        if enabled:
+            logger.info("Unified processing enabled")
+        else:
+            logger.info("Unified processing disabled, using legacy processing")
+
+    def _clean_json_response(self, response: str) -> str:
+        """
+        Clean the response to extract valid JSON
+
+        Args:
+            response: Raw response from AI model
+
+        Returns:
+            Cleaned JSON string
+        """
+        if not response:
+            return ""
+
+        # Remove common markdown formatting
+        cleaned = response.strip()
+
+        # Remove markdown code blocks
+        if cleaned.startswith("```json"):
+            cleaned = cleaned[7:]
+        elif cleaned.startswith("```"):
+            cleaned = cleaned[3:]
+
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]
+
+        # Remove any leading/trailing whitespace
+        cleaned = cleaned.strip()
+
+        # Remove any text before the first { or [
+        start_idx = -1
+        for i, char in enumerate(cleaned):
+            if char in ['{', '[']:
+                start_idx = i
+                break
+
+        if start_idx > 0:
+            cleaned = cleaned[start_idx:]
+        elif start_idx == -1:
+            # No JSON found
+            return ""
+
+        # Remove any text after the last } or ]
+        end_idx = -1
+        for i in range(len(cleaned) - 1, -1, -1):
+            if cleaned[i] in ['}', ']']:
+                end_idx = i
+                break
+
+        if end_idx >= 0:
+            cleaned = cleaned[:end_idx + 1]
+
+        return cleaned
+
+    def _extract_json_from_text(self, text: str) -> Optional[str]:
+        """
+        Try to extract JSON from text that may contain other content
+
+        Args:
+            text: Text that may contain JSON
+
+        Returns:
+            Extracted JSON string or None
+        """
+        import re
+
+        if not text:
+            return None
+
+        # Try to find JSON objects using regex
+        json_patterns = [
+            r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}',  # Simple nested objects
+            r'\{.*?\}',  # Basic object pattern
+            r'\[.*?\]'   # Array pattern
+        ]
+
+        for pattern in json_patterns:
+            matches = re.findall(pattern, text, re.DOTALL)
+            for match in matches:
+                try:
+                    # Test if it's valid JSON
+                    json.loads(match)
+                    return match
+                except json.JSONDecodeError:
+                    continue
+
+        # Try to find content between specific markers
+        markers = [
+            ('{', '}'),
+            ('[', ']')
+        ]
+
+        for start_marker, end_marker in markers:
+            start_pos = text.find(start_marker)
+            if start_pos != -1:
+                # Find the matching closing marker
+                bracket_count = 0
+                for i in range(start_pos, len(text)):
+                    if text[i] == start_marker:
+                        bracket_count += 1
+                    elif text[i] == end_marker:
+                        bracket_count -= 1
+                        if bracket_count == 0:
+                            potential_json = text[start_pos:i+1]
+                            try:
+                                json.loads(potential_json)
+                                return potential_json
+                            except json.JSONDecodeError:
+                                break
+
+        return None
+
+    def _validate_unified_response_structure(self, response: Dict[str, Any]) -> bool:
+        """Validate that the unified response has the expected structure"""
+        required_sections = [
+            "document_analysis",
+            "extracted_data",
+            "verification_results",
+            "processing_metadata"
+        ]
+
+        return all(section in response for section in required_sections)
+
+    def _fix_unified_response_structure(self, response: Dict[str, Any]) -> Dict[str, Any]:
+        """Fix incomplete unified response structure"""
+        fixed_response = {
+            "document_analysis": response.get("document_analysis", {}),
+            "extracted_data": response.get("extracted_data", {}),
+            "verification_results": response.get("verification_results", {}),
+            "processing_metadata": response.get("processing_metadata", {})
+        }
+
+        # Ensure minimum required fields
+        if not fixed_response["document_analysis"]:
+            fixed_response["document_analysis"] = {
+                "document_type": "unknown",
+                "confidence_score": 0.0,
+                "processing_method": "unified_prompt"
+            }
+
+        if not fixed_response["processing_metadata"]:
+            fixed_response["processing_metadata"] = {
+                "extraction_confidence": 0.0,
+                "text_quality": "unknown",
+                "completeness_score": 0.0
+            }
+
+        return fixed_response
+
+    def _process_with_fallback_prompt(self, text: str, source_file: str, min_confidence: float) -> Optional[Dict[str, Any]]:
+        """
+        Fallback processing using simpler prompts when unified prompt fails
+
+        Args:
+            text: Document text to process
+            source_file: Source file path
+            min_confidence: Minimum confidence threshold
+
+        Returns:
+            Processing result or None if fallback also fails
+        """
+        try:
+            logger.info("Using fallback processing with simpler prompts")
+
+            # Simple document detection
+            detection_prompt = f"""
+            Analyze this document text and identify the document type. Return a JSON response with:
+            {{
+                "document_type": "detected_type",
+                "confidence": 0.0-1.0,
+                "category": "document_category"
+            }}
+
+            Text: {text[:2000]}"""  # Limit text length for fallback
+
+            try:
+                detection_response = self.text_processor.process_text("", detection_prompt)
+                detection_result = json.loads(self._clean_json_response(detection_response))
+            except Exception as e:
+                logger.warning(f"Fallback detection failed: {str(e)}")
+                detection_result = {
+                    "document_type": "unknown",
+                    "confidence": 0.0,
+                    "category": "unknown"
+                }
+
+            # Simple data extraction
+            extraction_prompt = f"""
+            Extract key information from this {detection_result.get('document_type', 'document')} text. Return JSON with:
+            {{
+                "name": "extracted_name",
+                "document_number": "extracted_number",
+                "date_of_birth": "YYYY-MM-DD",
+                "other_fields": {{}}
+            }}
+
+            Text: {text[:2000]}"""
+
+            try:
+                extraction_response = self.text_processor.process_text("", extraction_prompt)
+                extraction_result = json.loads(self._clean_json_response(extraction_response))
+            except Exception as e:
+                logger.warning(f"Fallback extraction failed: {str(e)}")
+                extraction_result = {}
+
+            # Create legacy format result from fallback
+            confidence = detection_result.get("confidence", 0.0)
+            doc_type = detection_result.get("document_type", "unknown")
+
+            # Check confidence threshold
+            if confidence < min_confidence:
+                status = "rejected"
+                rejection_reason = f"Confidence {confidence:.2f} below threshold {min_confidence}"
+            else:
+                status = "success"
+                rejection_reason = None
+
+            # Create extracted data in legacy format
+            extracted_data = {
+                "data": {
+                    "Name": extraction_result.get("name"),
+                    "Document Number": extraction_result.get("document_number"),
+                    "Date of Birth": extraction_result.get("date_of_birth"),
+                    **extraction_result.get("other_fields", {})
+                },
+                "confidence": confidence,
+                "additional_info": "Processed with fallback method due to unified prompt failure",
+                "document_metadata": {
+                    "type": doc_type,
+                    "category": detection_result.get("category", "unknown"),
+                    "issuing_authority": "unknown",
+                    "key_indicators": []
+                }
+            }
+
+            # Create legacy format result
+            fallback_result = {
+                "status": status,
+                "document_type": doc_type,
+                "source_file": source_file,
+                "confidence": confidence,
+                "extracted_data": extracted_data,
+                "processing_method": "fallback_simplified",
+                "validation_level": "basic"
+            }
+
+            # Add rejection reason if applicable
+            if rejection_reason:
+                fallback_result["rejection_reason"] = rejection_reason
+
+            # Add basic verification result
+            fallback_result["verification_result"] = {
+                "is_genuine": True,  # Default to true for fallback
+                "confidence_score": 0.5,
+                "verification_checks": {},
+                "verification_summary": "Fallback processing - limited verification"
+            }
+
+            logger.info("Fallback processing completed successfully")
+            return fallback_result
+
+        except Exception as e:
+            logger.error(f"Fallback processing also failed: {str(e)}")
+            return None
+
     def _split_into_chunks(self, text: str) -> List[str]:
         """Split text into chunks based on document boundaries"""
         try:
-            # Common document separators
+
             separators = [
-                r'\n\s*\n\s*\n',  # Multiple blank lines
-                r'[-=]{3,}',      # Lines of dashes or equals
-                r'_{3,}',         # Lines of underscores
-                r'\*{3,}',        # Lines of asterisks
-                r'Page \d+',      # Page numbers
-                r'Document \d+',  # Document numbers
-                r'Copy \d+',      # Copy numbers
-                r'Original',      # Original document marker
-                r'Duplicate',     # Duplicate document marker
-                r'COPY',          # COPY marker
-                r'ORIGINAL'       # ORIGINAL marker
+                r'\n\s*\n\s*\n',
+                r'[-=]{3,}',
+                r'_{3,}',
+                r'\*{3,}',
+                r'Page \d+',
+                r'Document \d+',
+                r'Copy \d+',
+                r'Original',
+                r'Duplicate',
+                r'COPY',
+                r'ORIGINAL'
             ]
 
-            # Combine separators into a single pattern
             separator_pattern = '|'.join(f'({sep})' for sep in separators)
 
-            # Split text into chunks
             chunks = re.split(separator_pattern, text)
 
-            # Filter out empty chunks and separators
             chunks = [chunk.strip() for chunk in chunks if chunk and not any(sep in chunk for sep in separators)]
 
-            # If no chunks were found, return the whole text as one chunk
             if not chunks:
                 return [text]
 
@@ -209,33 +812,28 @@ class DocumentProcessor:
             document_segments = []
             image_count = 0
 
-            # First, extract all images from the document
             for rel in doc.part.rels.values():
                 if "image" in rel.target_ref:
                     image_count += 1
                     with tempfile.TemporaryDirectory() as temp_dir:
                         image_path = os.path.join(temp_dir, f"image_{image_count}.png")
                         try:
-                            # Get the image data
+
                             image_data = rel.target_part.blob
 
-                            # Save the image
                             with open(image_path, 'wb') as f:
                                 f.write(image_data)
 
-                            # Process the image
                             img = Image.open(image_path)
 
-                            # Try Tesseract OCR first
                             ocr_text = pytesseract.image_to_string(img)
 
-                            # If Tesseract results are poor, use Gemini Vision
                             if not self._is_good_ocr_result(ocr_text):
                                 logger.info(
                                     f"Tesseract OCR yielded poor results for image {image_count}, trying Gemini Vision")
                                 response = self.text_extractor.process_with_gemini(
                                     image_path,
-                                    "Extract all text from this document image. Return only the raw text without any formatting."
+                                    OCR_TEXT_EXTRACTION_PROMPT
                                 )
                                 ocr_text = response.strip()
 
@@ -253,7 +851,6 @@ class DocumentProcessor:
                             logger.warning(f"Error processing image {image_count}: {str(e)}")
                             continue
 
-            # Also check for images in paragraphs and tables
             for para in doc.paragraphs:
                 for run in para.runs:
                     if run._element.xpath('.//w:drawing'):
@@ -261,27 +858,23 @@ class DocumentProcessor:
                         with tempfile.TemporaryDirectory() as temp_dir:
                             image_path = os.path.join(temp_dir, f"image_{image_count}.png")
                             try:
-                                # Get the image data
+
                                 image_data = run._element.xpath('.//a:blip/@r:embed')[0]
                                 image_part = doc.part.related_parts[image_data]
 
-                                # Save the image
                                 with open(image_path, 'wb') as f:
                                     f.write(image_part.blob)
 
-                                # Process the image
                                 img = Image.open(image_path)
 
-                                # Try Tesseract OCR first
                                 ocr_text = pytesseract.image_to_string(img)
 
-                                # If Tesseract results are poor, use Gemini Vision
                                 if not self._is_good_ocr_result(ocr_text):
                                     logger.info(
                                         f"Tesseract OCR yielded poor results for image {image_count}, trying Gemini Vision")
                                     response = self.text_extractor.process_with_gemini(
                                         image_path,
-                                        "Extract all text from this document image. Return only the raw text without any formatting."
+                                        OCR_TEXT_EXTRACTION_PROMPT
                                     )
                                     ocr_text = response.strip()
 
@@ -316,12 +909,10 @@ class DocumentProcessor:
             doc = Document(file_path)
             text_content = []
 
-            # Extract text from paragraphs
             for para in doc.paragraphs:
                 if para.text.strip():
                     text_content.append(para.text)
 
-            # Extract text from tables
             for table in doc.tables:
                 for row in table.rows:
                     for cell in row.cells:
@@ -330,8 +921,7 @@ class DocumentProcessor:
 
             combined_text = "\n".join(text_content).strip()
 
-            # Check if we have substantial text content
-            if len(combined_text) > 100:  # If we have more than 100 characters of text
+            if len(combined_text) > 100:
                 logger.info("DOCX has substantial text content - using normal text extraction")
                 return "text_extraction"
             else:
@@ -340,7 +930,7 @@ class DocumentProcessor:
 
         except Exception as e:
             logger.error(f"Error determining DOCX processing method: {str(e)}")
-            return "ocr_required"  # Default to OCR if we can't determine
+            return "ocr_required"
 
     def _process_docx(self, file_path: str, min_confidence: float) -> List[Dict[str, Any]]:
         """Process a DOCX file by determining if OCR is needed or normal text extraction"""
@@ -351,12 +941,12 @@ class DocumentProcessor:
         consolidated_results = []
 
         try:
-            # Determine the best processing method
+
             processing_method = self._determine_docx_processing_method(file_path)
             logger.info(f"Using processing method: {processing_method}")
 
             if processing_method == "text_extraction":
-                # Process using normal text extraction
+
                 logger.info("Processing DOCX using normal text extraction")
 
                 try:
@@ -367,41 +957,35 @@ class DocumentProcessor:
 
                 text_content = []
 
-                # Extract text from paragraphs
                 for para in doc.paragraphs:
                     if para.text.strip():
                         text_content.append(para.text)
 
-                # Extract text from tables
                 for table in doc.tables:
                     for row in table.rows:
                         for cell in row.cells:
                             if cell.text.strip():
                                 text_content.append(cell.text)
 
-                # Process the combined text content
                 if text_content:
                     combined_text = "\n".join(text_content)
                     logger.info(f"Extracted {len(combined_text)} characters of text from DOCX")
 
-                    # Try to process as multiple documents first
                     multi_doc_results = self._process_multiple_documents(combined_text, file_path, min_confidence)
                     if multi_doc_results:
                         consolidated_results.extend(multi_doc_results)
                     else:
-                        # If no multiple documents found, process as single document
+
                         result = self._process_text_content(combined_text, file_path, min_confidence)
                         if result:
                             consolidated_results.append(result)
 
-            else:  # OCR required
+            else:
                 return self._process_docx_with_ocr(file_path, min_confidence)
 
-            # If no valid results were found
             if not consolidated_results:
-                logger.warning(f"No valid content found in DOCX file: {file_path}")
+                logger.warning(f"No valid content found in DOCX file: {file_path}")   
 
-                # Try to extract basic information even if processing failed
                 try:
                     doc = Document(file_path)
                     basic_text = []
@@ -411,7 +995,7 @@ class DocumentProcessor:
 
                     basic_extracted_data = {
                         "data": {
-                            "raw_text_snippets": basic_text[:10],  # First 10 paragraphs
+                            "raw_text_snippets": basic_text[:10],
                             "total_paragraphs": len([p for p in doc.paragraphs if p.text.strip()]),
                             "file_type": "docx"
                         },
@@ -446,7 +1030,6 @@ class DocumentProcessor:
         except Exception as e:
             logger.error(f"Error processing DOCX file: {str(e)}")
 
-            # Try to extract basic file information even on error
             error_extracted_data = {
                 "data": {
                     "file_type": "docx",
@@ -482,13 +1065,13 @@ class DocumentProcessor:
         """Process a DOCX file using OCR on embedded images"""
         logger.info("Processing DOCX using OCR on embedded images")
         consolidated_results = []
-        processed_images = set()  # Track processed images to avoid duplicates
+        processed_images = set()
 
         try:
             if DOCX_AVAILABLE and Document is not None:
                 document_segments = self._extract_text_from_docx_images(file_path)
             else:
-                # If python-docx is not available, try to convert DOCX to PDF first
+
                 with tempfile.TemporaryDirectory() as temp_dir:
                     pdf_path = os.path.join(temp_dir, "temp.pdf")
                     try:
@@ -500,7 +1083,7 @@ class DocumentProcessor:
 
             if document_segments:
                 for segment in document_segments:
-                    # Skip if we've already processed this image
+
                     if segment["image_path"] in processed_images:
                         continue
 
@@ -508,7 +1091,7 @@ class DocumentProcessor:
 
                     if segment["text"].strip():
                         logger.info(f"Processing image {segment['image_number']}")
-                        # Try to process as multiple documents first
+
                         multi_doc_results = self._process_multiple_documents(segment["text"], file_path, min_confidence)
                         if multi_doc_results:
                             for result in multi_doc_results:
@@ -516,35 +1099,31 @@ class DocumentProcessor:
                                 result["processing_method"] = "ocr"
                                 consolidated_results.append(result)
                         else:
-                            # If no multiple documents found, process as single document
+
                             result = self._process_text_content(segment["text"], file_path, min_confidence)
                             if result:
                                 result["image_number"] = segment["image_number"]
                                 result["processing_method"] = "ocr"
                                 consolidated_results.append(result)
 
-            # If python-docx is available, also try to process any normal text content as backup
             if DOCX_AVAILABLE and Document is not None:
                 try:
                     doc = Document(file_path)
                     text_content = []
 
-                    # Extract text from paragraphs
                     for para in doc.paragraphs:
                         if para.text.strip():
                             text_content.append(para.text)
 
-                    # Extract text from tables
                     for table in doc.tables:
                         for row in table.rows:
                             for cell in row.cells:
                                 if cell.text.strip():
                                     text_content.append(cell.text)
 
-                    # Process any additional text content found
                     if text_content:
                         combined_text = "\n".join(text_content)
-                        if len(combined_text.strip()) > 50:  # Only process if substantial
+                        if len(combined_text.strip()) > 50:
                             logger.info(f"Also processing {len(combined_text)} characters of normal text from DOCX")
                             result = self._process_text_content(combined_text, file_path, min_confidence)
                             if result:
@@ -570,7 +1149,6 @@ class DocumentProcessor:
                     "validation_level": "failed"
                 }]
 
-            # Log the results
             for result in consolidated_results:
                 logger.info(f"Processed document type: {result.get('document_type', 'unknown')}, "
                            f"Status: {result.get('status', 'unknown')}, "
@@ -614,11 +1192,9 @@ class DocumentProcessor:
                 if result.get("status") != "success":
                     continue
 
-                # Create a unique identifier for the document
                 doc_type = result.get("document_type", "unknown")
                 extracted_data = result.get("extracted_data", {})
 
-                # Create a unique key based on document type and key fields
                 if doc_type == "aadhaar_card":
                     key = f"aadhaar_{extracted_data.get('Aadhaar Number', '')}"
                 elif doc_type == "license":
@@ -648,48 +1224,17 @@ class DocumentProcessor:
             if not isinstance(min_confidence, (int, float)) or not 0 <= min_confidence <= 1:
                 raise ValueError("Invalid confidence threshold: min_confidence must be between 0 and 1")
 
+            # Use unified processing approach directly in DocumentProcessor3
+            logger.info("Using unified document processing")
             try:
-                detection_prompt = f"""
-                    Analyze this text and determine what type of document it is. Look for any official document indicators.
-                    Consider these aspects:
-                    1. Document Type Indicators:
-                       - Official headers and titles
-                       - Government or organizational logos
-                       - Document numbers or identifiers
-                       - Official stamps or seals
-                       - Security features mentioned
-                       - Issuing authority information
+                return self._process_with_unified_prompt(text, source_file, min_confidence)
+            except Exception as e:
+                logger.warning(f"Unified processing failed, falling back to legacy: {str(e)}")
 
-                    2. Document Categories:
-                       - Identity documents (ID cards, passports, etc.)
-                       - Legal documents (certificates, licenses, etc.)
-                       - Financial documents (statements, receipts, etc.)
-                       - Educational documents (degrees, certificates, etc.)
-                       - Business documents (contracts, agreements, etc.)
-                       - Government documents (permits, registrations, etc.)
-                       - Medical documents (reports, prescriptions, etc.)
-                       - Any other official document type
-
-                    Text:
-                    {text}
-
-                    Return a JSON response with:
-                    {{
-                        "document_type": "detected_type",
-                        "document_category": "category",
-                        "confidence": 0.0-1.0,
-                        "reasoning": "explanation",
-                        "key_indicators": ["list of key indicators found"],
-                        "issuing_authority": "detected authority if any"
-                    }}
-
-                    Important:
-                    - Be thorough in identifying document type
-                    - Consider all possible document categories
-                    - Look for any official or formal document indicators
-                    - Provide detailed reasoning for the classification
-                    - Include confidence score based on evidence found
-                    """
+            # Legacy processing fallback
+            logger.info("Using legacy processing for text content")
+            try:
+                detection_prompt = DOCUMENT_DETECTION_PROMPT.format(text=text)
 
                 response = self.text_processor.process_text(text, detection_prompt)
                 if not response:
@@ -707,7 +1252,6 @@ class DocumentProcessor:
                 if not doc_type or doc_type == "unknown" or confidence < min_confidence:
                     logger.warning(f"Could not confidently determine document type (confidence: {confidence})")
 
-                    # Include any extracted data even if confidence is low
                     extracted_data_for_response = {
                         "data": detection_result.get("key_indicators", []) if detection_result else {},
                         "confidence": confidence,
@@ -720,7 +1264,6 @@ class DocumentProcessor:
                         }
                     }
 
-                    # Generate template suggestion for unknown document type
                     template_suggestion = self._generate_template_suggestion(text, extracted_data_for_response, confidence)
 
                     return {
@@ -732,53 +1275,19 @@ class DocumentProcessor:
                         "extracted_data": extracted_data_for_response,
                         "validation_level": "failed",
                         "document_metadata": extracted_data_for_response["document_metadata"],
-                        "template_suggestion": template_suggestion  # Add template suggestion
+                        "template_suggestion": template_suggestion
                     }
 
                 logger.info(f"Detected document type: {doc_type} with confidence {confidence}")
 
                 try:
-                    extraction_prompt = f"""
-                        You are a document analysis expert. Extract all relevant information from this document.
-
-                        Document Text:
-                        {text}
-
-                        Document Type: {doc_type}
-                        Document Category: {detection_result.get('document_category', 'unknown')}
-                        Issuing Authority: {detection_result.get('issuing_authority', 'unknown')}
-
-                        Important:
-                        1. Extract ALL visible information from the document
-                        2. Identify and extract:
-                           - Document identifiers (numbers, codes, etc.)
-                           - Personal information (names, dates, addresses, etc.)
-                           - Official information (authorities, dates, locations, etc.)
-                           - Any relevant dates (issue, expiry, etc.)
-                           - Any relevant numbers or codes
-                           - Any official stamps or seals mentioned
-                           - Any security features mentioned
-                           - Any other relevant information
-                        3. For dates, use YYYY-MM-DD format
-                        4. For numbers, extract them exactly as shown
-                        5. For names and addresses, preserve the exact spelling and formatting
-                        6. Include any additional context that might be relevant
-
-                        Return the extracted information in JSON format with this structure:
-                        {{
-                            "data": {{
-                                // All extracted fields
-                            }},
-                            "confidence": 0.0-1.0,
-                            "additional_info": "Any additional relevant information",
-                            "document_metadata": {{
-                                "type": "{doc_type}",
-                                "category": "{detection_result.get('document_category', 'unknown')}",
-                                "issuing_authority": "{detection_result.get('issuing_authority', 'unknown')}",
-                                "key_indicators": {json.dumps(detection_result.get('key_indicators', []))}
-                            }}
-                        }}
-                        """
+                    extraction_prompt = DOCUMENT_EXTRACTION_PROMPT.format(
+                        text=text,
+                        doc_type=doc_type,
+                        document_category=detection_result.get('document_category', 'unknown'),
+                        issuing_authority=detection_result.get('issuing_authority', 'unknown'),
+                        key_indicators=json.dumps(detection_result.get('key_indicators', []))
+                    )
 
                     response = self.text_processor.process_text(text, extraction_prompt)
                     if not response:
@@ -805,8 +1314,6 @@ class DocumentProcessor:
                         rejection_reason = verification_result.get("rejection_reason", "Document failed authenticity verification")
                         logger.warning(f"Document rejected - Not genuine: {rejection_reason}")
 
-                        # Still include extracted data even if document is rejected
-                        # Keep the original nested structure instead of flattening
                         logger.info(f"Including extracted data in rejected response: {json.dumps(extracted_data, indent=2)}")
 
                         return {
@@ -815,17 +1322,16 @@ class DocumentProcessor:
                             "source_file": source_file,
                             "rejection_reason": rejection_reason,
                             "verification_result": verification_result,
-                            "extracted_data": extracted_data,  # Include original extracted data structure
+                            "extracted_data": extracted_data,
                             "confidence": confidence,
                             "validation_level": "strict",
                             "document_metadata": extracted_data.get("document_metadata", {})
                         }
 
-                    # Use original extracted data structure for consistency
                     logger.info(f"Including extracted data in successful response: {json.dumps(extracted_data, indent=2)}")
 
                     response = {
-                        "extracted_data": extracted_data,  # Use original structure
+                        "extracted_data": extracted_data,
                         "status": "success",
                         "confidence": confidence,
                         "document_type": doc_type,
@@ -835,8 +1341,7 @@ class DocumentProcessor:
                         "document_metadata": extracted_data.get("document_metadata", {})
                     }
 
-                    # Add template suggestion for low confidence matches
-                    if confidence < 0.7:  # Suggest template for confidence below 70%
+                    if confidence < 0.7:
                         template_suggestion = self._generate_template_suggestion(text, extracted_data, confidence)
                         template_suggestion["reason"] = f"Low confidence match (confidence: {confidence:.2f}). Consider creating a specific template for better accuracy."
                         response["template_suggestion"] = template_suggestion
@@ -854,7 +1359,6 @@ class DocumentProcessor:
         except Exception as e:
             logger.exception(f"Error processing text content: {str(e)}")
 
-            # Include basic extracted data structure even for errors
             error_extracted_data = {
                 "data": {"raw_text": text[:500] + "..." if len(text) > 500 else text} if text else {},
                 "confidence": 0.0,
@@ -884,99 +1388,12 @@ class DocumentProcessor:
     def verify_document(self, extracted_data: Dict[str, Any], doc_type: str) -> Dict[str, Any]:
         """Verify document authenticity and data validity"""
         try:
-            verification_prompt = f"""
-            You are a document verification expert. Analyze this document data and determine if it is genuine.
-            Provide a detailed verification report with specific checks and findings.
-
-            Document Data:
-            {json.dumps(extracted_data, indent=2)}
-
-            Document Type: {doc_type}
-            Document Category: {extracted_data.get('document_metadata', {}).get('category', 'unknown')}
-            Issuing Authority: {extracted_data.get('document_metadata', {}).get('issuing_authority', 'unknown')}
-
-            Perform the following checks:
-
-            1. Document Authenticity:
-               - Verify presence of required fields for this document type
-               - Check for official text and formatting
-               - Validate document structure and layout
-               - Check for security features
-               - Verify document quality indicators
-               - Look for official headers and footers
-               - Check for any official stamps or marks
-
-            2. Security Feature Analysis:
-               - Look for official seals and stamps
-               - Check for watermarks or holograms
-               - Verify presence of security patterns
-               - Look for QR codes or barcodes
-               - Check for any digital signatures
-               - Verify any security numbers or codes
-               - Look for any anti-counterfeit measures
-
-            3. Data Validation:
-               - Verify all identification numbers and their formats
-               - Check date formats and their logical consistency
-               - Validate name and address formatting
-               - Look for any data inconsistencies
-               - Verify field relationships and dependencies
-               - Check for logical data patterns
-               - Validate any reference numbers
-
-            4. Document Quality:
-               - Check printing quality indicators
-               - Verify text alignment
-               - Check for any smudges or marks
-               - Verify color consistency
-               - Check for any signs of poor quality
-               - Verify professional formatting
-               - Check for any signs of manipulation
-
-            Return a JSON response with:
-            {{
-                "is_genuine": true/false,
-                "confidence_score": 0.0-1.0,
-                "rejection_reason": "reason if not genuine",
-                "verification_checks": {{
-                    "authenticity": {{
-                        "passed": true/false,
-                        "details": "explanation",
-                        "confidence": 0.0-1.0
-                    }},
-                    "security_features": {{
-                        "passed": true/false,
-                        "details": "explanation",
-                        "confidence": 0.0-1.0
-                    }},
-                    "data_validation": {{
-                        "passed": true/false,
-                        "details": "explanation",
-                        "confidence": 0.0-1.0
-                    }},
-                    "quality": {{
-                        "passed": true/false,
-                        "details": "explanation",
-                        "confidence": 0.0-1.0
-                    }}
-                }},
-                "security_features_found": ["list of security features"],
-                "verification_summary": "Overall verification summary",
-                "recommendations": ["list of recommendations for improvement"]
-            }}
-
-            Important:
-            - Be thorough but fair in your analysis
-            - Consider document-specific requirements
-            - Account for variations in official document formats
-            - Consider both digital and physical security features
-            - Look for logical consistency in the data
-            - Consider the document's intended use
-            - Be lenient with minor formatting variations
-            - Focus on key security features and data validity
-            - Consider official document standards
-            - Account for regional variations in document formats
-            """
+            verification_prompt = DOCUMENT_VERIFICATION_PROMPT.format(
+                document_data=json.dumps(extracted_data, indent=2),
+                doc_type=doc_type,
+                document_category=extracted_data.get('document_metadata', {}).get('category', 'unknown'),
+                issuing_authority=extracted_data.get('document_metadata', {}).get('issuing_authority', 'unknown')
+            )
 
             response = self.text_processor.process_text(json.dumps(extracted_data), verification_prompt)
             verification_result = json.loads(response.strip().replace("```json", "").replace("```", "").strip())
@@ -1033,7 +1450,7 @@ class DocumentProcessor:
                 raise ValueError(f"Failed to open PDF file: {str(e)}")
 
             try:
-                # First try to process the entire PDF as one document
+
                 all_text = ""
                 for page_num in range(pdf_document.page_count):
                     try:
@@ -1047,7 +1464,7 @@ class DocumentProcessor:
 
                 if all_text.strip():
                     try:
-                        # Try to process as multiple documents first
+
                         multi_doc_results = self._process_multiple_documents(all_text, pdf_path, min_confidence)
                         if multi_doc_results:
                             results.extend(multi_doc_results)
@@ -1055,7 +1472,6 @@ class DocumentProcessor:
                     except Exception as e:
                         logger.warning(f"Error processing PDF as multiple documents: {str(e)}")
 
-                # If multiple document processing didn't yield results, process page by page
                 for page_num in range(pdf_document.page_count):
                     try:
                         logger.info(f"Processing page {page_num + 1} of {pdf_document.page_count}")
@@ -1103,7 +1519,7 @@ class DocumentProcessor:
 
                                         if ocr_text:
                                             try:
-                                                # Try to process OCR text as multiple documents
+
                                                 multi_doc_results = self._process_multiple_documents(ocr_text, pdf_path, min_confidence)
                                                 if multi_doc_results:
                                                     for result in multi_doc_results:
@@ -1112,7 +1528,7 @@ class DocumentProcessor:
                                                         result["processing_method"] = "ocr"
                                                     results.extend(multi_doc_results)
                                                 else:
-                                                    # Process as single document if multiple document detection failed
+
                                                     result = self._process_text_content(ocr_text, pdf_path, min_confidence)
                                                     if result:
                                                         result["page_number"] = page_num + 1
@@ -1128,7 +1544,7 @@ class DocumentProcessor:
                         else:
                             if text.strip():
                                 try:
-                                    # Try to process text as multiple documents
+
                                     multi_doc_results = self._process_multiple_documents(text, pdf_path, min_confidence)
                                     if multi_doc_results:
                                         for result in multi_doc_results:
@@ -1136,7 +1552,7 @@ class DocumentProcessor:
                                             result["processing_method"] = "direct_text"
                                         results.extend(multi_doc_results)
                                     else:
-                                        # Process as single document if multiple document detection failed
+
                                         result = self._process_text_content(text, pdf_path, min_confidence)
                                         if result:
                                             result["page_number"] = page_num + 1
@@ -1152,7 +1568,6 @@ class DocumentProcessor:
                 if not results:
                     logger.warning(f"No valid content found in PDF file: {pdf_path}")
 
-                    # Try to extract basic PDF information
                     basic_pdf_data = {
                         "data": {
                             "file_type": "pdf",
@@ -1183,7 +1598,6 @@ class DocumentProcessor:
             except Exception as e:
                 logger.error(f"Error processing PDF file: {str(e)}")
 
-                # Include basic error information
                 error_pdf_data = {
                     "data": {
                         "file_type": "pdf",
@@ -1225,7 +1639,6 @@ class DocumentProcessor:
         except Exception as e:
             logger.error(f"Error in PDF processing: {str(e)}")
 
-            # Include basic error information for outer PDF processing
             outer_error_data = {
                 "data": {
                     "file_type": "pdf",
@@ -1262,7 +1675,6 @@ class DocumentProcessor:
         try:
             text_lower = text.lower() if text else ""
 
-            # Analyze content for template suggestion
             suggestion = {
                 "should_create_template": True,
                 "reason": f"Document type not recognized (confidence: {confidence:.2f})",
@@ -1294,7 +1706,6 @@ class DocumentProcessor:
     def _analyze_content_for_template_type(self, text_lower: str) -> dict:
         """Analyze document content to suggest template details"""
 
-        # Default suggestion
         suggestion = {
             "name": "Custom Template",
             "type": "other",
@@ -1302,7 +1713,6 @@ class DocumentProcessor:
             "suggested_fields": ["document_number", "name", "date"]
         }
 
-        # Analyze content patterns for specific document types
         if any(keyword in text_lower for keyword in ["aadhaar", "aadhar", "uid", "unique identification"]):
             suggestion.update({
                 "name": "Custom Aadhaar Template",
@@ -1425,21 +1835,20 @@ class DocumentProcessor:
         sample_fields = {}
 
         try:
-            # Extract from extracted_data if available
+
             if extracted_data and "data" in extracted_data:
                 data_content = extracted_data["data"]
                 if isinstance(data_content, dict):
                     for key, value in data_content.items():
                         if isinstance(value, str) and value.strip():
-                            sample_fields[key] = value[:50]  # Limit to 50 chars
+                            sample_fields[key] = value[:50]
                         elif isinstance(value, dict):
                             for sub_key, sub_value in value.items():
                                 if isinstance(sub_value, str) and sub_value.strip():
                                     sample_fields[f"{key}_{sub_key}"] = str(sub_value)[:50]
 
-            # Extract patterns from text
             if text:
-                # Extract dates
+
                 date_patterns = [
                     r'\b(\d{1,2}[/-]\d{1,2}[/-]\d{4})\b',
                     r'\b(\d{4}[/-]\d{1,2}[/-]\d{1,2})\b',
@@ -1449,23 +1858,21 @@ class DocumentProcessor:
                 for pattern in date_patterns:
                     matches = re.findall(pattern, text)
                     if matches:
-                        sample_fields["dates_found"] = matches[:3]  # First 3 dates
+                        sample_fields["dates_found"] = matches[:3]
                         break
 
-                # Extract potential ID numbers
                 id_patterns = [
-                    r'\b([A-Z]{3,5}\d{4,10}[A-Z]?)\b',  # Alphanumeric IDs like PAN
-                    r'\b(\d{12})\b',  # 12-digit numbers like Aadhaar
-                    r'\b(\d{10,16})\b'  # Other long numbers
+                    r'\b([A-Z]{3,5}\d{4,10}[A-Z]?)\b',
+                    r'\b(\d{12})\b',
+                    r'\b(\d{10,16})\b'
                 ]
 
                 for pattern in id_patterns:
                     matches = re.findall(pattern, text)
                     if matches:
-                        sample_fields["id_numbers_found"] = matches[:3]  # First 3 numbers
+                        sample_fields["id_numbers_found"] = matches[:3]
                         break
 
-                # Extract potential names (capitalized words)
                 name_pattern = r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b'
                 names = re.findall(name_pattern, text)
                 if names:
@@ -1600,7 +2007,7 @@ class DocumentProcessor:
                 try:
                     response = self.text_extractor.process_with_gemini(
                         image_path,
-                        "Extract all text from this document image. Return only the raw text without any formatting."
+                        OCR_TEXT_EXTRACTION_PROMPT
                     )
                     if not response:
                         raise ValueError("Empty response from Gemini Vision")
@@ -1673,7 +2080,7 @@ class DocumentProcessor:
                 try:
                     response = self.text_extractor.process_with_gemini(
                         image_path,
-                        "Extract all text from this document image. Return only the raw text without any formatting."
+                        OCR_TEXT_EXTRACTION_PROMPT
                     )
                     if not response:
                         raise ValueError("Empty response from Gemini Vision")
@@ -1718,91 +2125,13 @@ class DocumentProcessor:
                 }
             }
 
-    def _initialize_document_patterns(self) -> Dict[str, List[str]]:
-        """Initialize document patterns dynamically based on categories"""
-        patterns = {}
-
-        # Add patterns for each category
-        for category, doc_types in self.document_categories.items():
-            for doc_type in doc_types:
-                patterns[doc_type] = self._generate_patterns_for_type(doc_type)
-
-        return patterns
-
-    def _generate_patterns_for_type(self, doc_type: str) -> List[str]:
-        """Generate patterns for a specific document type"""
-        base_patterns = []
-
-        # Convert document type to searchable terms
-        terms = doc_type.replace('_', ' ').split()
-
-        # Generate basic patterns
-        for term in terms:
-            base_patterns.extend([
-                f'(?i){term}',  # Case insensitive match
-                f'(?i){term}s',  # Plural form
-                f'(?i){term}ing',  # Gerund form
-                f'(?i){term}ed'  # Past tense
-            ])
-
-        # Add document-specific patterns based on category
-        if doc_type in self.document_categories['identity']:
-            base_patterns.extend([
-                r'(?i)id\s*card',
-                r'(?i)identification',
-                r'(?i)identity\s*document',
-                r'(?i)official\s*id',
-                r'(?i)government\s*issued'
-            ])
-        elif doc_type in self.document_categories['legal']:
-            base_patterns.extend([
-                r'(?i)legal\s*document',
-                r'(?i)official\s*document',
-                r'(?i)notarized',
-                r'(?i)certified',
-                r'(?i)authorized'
-            ])
-        elif doc_type in self.document_categories['financial']:
-            base_patterns.extend([
-                r'(?i)financial\s*document',
-                r'(?i)monetary',
-                r'(?i)payment',
-                r'(?i)transaction',
-                r'(?i)account'
-            ])
-        elif doc_type in self.document_categories['educational']:
-            base_patterns.extend([
-                r'(?i)educational\s*document',
-                r'(?i)academic',
-                r'(?i)school',
-                r'(?i)university',
-                r'(?i)institution'
-            ])
-        elif doc_type in self.document_categories['medical']:
-            base_patterns.extend([
-                r'(?i)medical\s*document',
-                r'(?i)health',
-                r'(?i)patient',
-                r'(?i)clinical',
-                r'(?i)diagnostic'
-            ])
-        elif doc_type in self.document_categories['business']:
-            base_patterns.extend([
-                r'(?i)business\s*document',
-                r'(?i)commercial',
-                r'(?i)corporate',
-                r'(?i)company',
-                r'(?i)enterprise'
-            ])
-
-        return base_patterns
+# Methods removed - using constants from constants.py
 
     def _process_multiple_documents(self, text: str, source_file: str, min_confidence: float) -> List[Dict[str, Any]]:
         """Process text that may contain multiple documents"""
         try:
             results = []
 
-            # Split text into potential document chunks
             chunks = self._split_into_chunks(text)
             logger.info(f"Split text into {len(chunks)} potential document chunks")
 
@@ -1812,14 +2141,17 @@ class DocumentProcessor:
 
                 logger.info(f"Processing chunk {chunk_index + 1} of {len(chunks)}")
 
-                # Process each chunk as a separate document
                 result = self._process_text_content(chunk, source_file, min_confidence)
 
                 if result:
-                    # Add chunk information to the result
                     result["chunk_index"] = chunk_index + 1
                     result["total_chunks"] = len(chunks)
                     results.append(result)
+
+            # Merge results if we have multiple chunks with data
+            if len(results) > 1:
+                merged_result = self._merge_chunk_results(results, source_file)
+                return [merged_result]
 
             return results
 
@@ -1827,16 +2159,123 @@ class DocumentProcessor:
             logger.error(f"Error processing multiple documents: {str(e)}")
             return []
 
+    def _merge_chunk_results(self, results: List[Dict[str, Any]], source_file: str) -> Dict[str, Any]:
+        """
+        Merge results from multiple chunks into a single comprehensive result
+
+        Args:
+            results: List of results from different chunks
+            source_file: Source file name
+
+        Returns:
+            Merged result dictionary
+        """
+        try:
+            logger.info(f"Merging {len(results)} chunk results")
+
+            # Find the best result (highest confidence with most data)
+            best_result = None
+            best_score = 0
+
+            for result in results:
+                confidence = result.get('confidence', 0.0)
+                extracted_data = result.get('extracted_data', {}).get('data', {})
+                data_count = len([v for v in extracted_data.values() if v and str(v).lower() not in ['null', 'not_present', 'n/a']])
+
+                # Score based on confidence and amount of extracted data
+                score = confidence + (data_count * 0.1)
+
+                if score > best_score:
+                    best_score = score
+                    best_result = result
+
+            if not best_result:
+                best_result = results[0]
+
+            # Merge extracted data from all chunks
+            merged_data = {}
+            all_document_types = set()
+
+            for result in results:
+                # Collect document types
+                doc_type = result.get('document_type', 'unknown')
+                if doc_type != 'unknown':
+                    all_document_types.add(doc_type)
+
+                # Merge extracted data
+                extracted_data = result.get('extracted_data', {}).get('data', {})
+                for key, value in extracted_data.items():
+                    if value and str(value).lower() not in ['null', 'not_present', 'n/a', '']:
+                        if key not in merged_data or not merged_data[key]:
+                            merged_data[key] = value
+                        elif isinstance(value, list) and isinstance(merged_data[key], list):
+                            # Merge lists and remove duplicates
+                            merged_data[key] = list(set(merged_data[key] + value))
+                        elif key in merged_data and merged_data[key] != value:
+                            # If we have different values for the same key, create a list
+                            if not isinstance(merged_data[key], list):
+                                merged_data[key] = [merged_data[key]]
+                            if value not in merged_data[key]:
+                                merged_data[key].append(value)
+
+            # Determine the primary document type
+            if len(all_document_types) == 1:
+                primary_doc_type = list(all_document_types)[0]
+            elif 'resume' in all_document_types:
+                primary_doc_type = 'resume'
+            elif all_document_types:
+                primary_doc_type = list(all_document_types)[0]
+            else:
+                primary_doc_type = best_result.get('document_type', 'unknown')
+
+            # Create merged result
+            merged_result = {
+                "status": "success",
+                "document_type": primary_doc_type,
+                "source_file": source_file,
+                "confidence": max([r.get('confidence', 0.0) for r in results]),
+                "extracted_data": {
+                    "data": merged_data,
+                    "confidence": max([r.get('confidence', 0.0) for r in results]),
+                    "additional_info": f"Merged from {len(results)} document chunks",
+                    "document_metadata": {
+                        "type": primary_doc_type,
+                        "category": best_result.get('extracted_data', {}).get('document_metadata', {}).get('category', 'unknown'),
+                        "issuing_authority": "merged_document",
+                        "key_indicators": list(all_document_types),
+                        "chunks_processed": len(results)
+                    }
+                },
+                "processing_method": "unified_prompt_merged",
+                "validation_level": "comprehensive",
+                "chunk_info": {
+                    "total_chunks": len(results),
+                    "chunks_with_data": len([r for r in results if r.get('extracted_data', {}).get('data')]),
+                    "document_types_found": list(all_document_types)
+                }
+            }
+
+            # Add verification result from best result
+            if best_result.get('verification_result'):
+                merged_result['verification_result'] = best_result['verification_result']
+
+            logger.info(f"Merged result: document_type={primary_doc_type}, data_fields={len(merged_data)}")
+            return merged_result
+
+        except Exception as e:
+            logger.error(f"Error merging chunk results: {str(e)}")
+            # Return the best individual result as fallback
+            return max(results, key=lambda r: r.get('confidence', 0.0)) if results else {}
+
     def _convert_docx_to_pdf(self, docx_path: str, pdf_path: str) -> None:
         """Convert a DOCX file to PDF format"""
         try:
-            # Try using LibreOffice/OpenOffice first
+
             try:
                 import subprocess
-                # Check if LibreOffice is available
+
                 subprocess.run(['soffice', '--version'], check=True, capture_output=True)
-                
-                # Convert using LibreOffice
+
                 subprocess.run([
                     'soffice',
                     '--headless',
@@ -1844,32 +2283,29 @@ class DocumentProcessor:
                     '--outdir', os.path.dirname(pdf_path),
                     docx_path
                 ], check=True)
-                
-                # Rename the output file if needed
+
                 generated_pdf = os.path.join(
                     os.path.dirname(pdf_path),
                     os.path.splitext(os.path.basename(docx_path))[0] + '.pdf'
                 )
                 if generated_pdf != pdf_path:
                     os.rename(generated_pdf, pdf_path)
-                    
+
                 return
             except Exception as e:
                 logger.warning(f"LibreOffice conversion failed: {str(e)}")
 
-            # Try using win32com (Windows only)
             try:
                 import win32com.client
                 word = win32com.client.Dispatch('Word.Application')
                 doc = word.Documents.Open(docx_path)
-                doc.SaveAs(pdf_path, FileFormat=17)  # 17 = PDF format
+                doc.SaveAs(pdf_path, FileFormat=17)
                 doc.Close()
                 word.Quit()
                 return
             except Exception as e:
                 logger.warning(f"Win32com conversion failed: {str(e)}")
 
-            # Try using docx2pdf as a last resort
             try:
                 from docx2pdf import convert
                 convert(docx_path, pdf_path)
@@ -1883,55 +2319,3 @@ class DocumentProcessor:
             logger.error(f"Error converting DOCX to PDF: {str(e)}")
             raise RuntimeError(f"Failed to convert DOCX to PDF: {str(e)}")
 
-def main():
-    try:
-        input_path ="D:\\imageextractor\\identites\\OIP.pdf"
-        api_key = API_KEY_1
-
-        if not input_path or not os.path.exists(input_path):
-            raise ValueError(f"Invalid input path: {input_path}")
-
-        if not api_key:
-            raise ValueError("API key is required")
-
-        processor = DocumentProcessor(api_key=api_key)
-
-        try:
-            results = processor.process_file(file_path=input_path)
-        except Exception as e:
-            logger.error(f"Error processing file: {str(e)}")
-            raise
-
-        if results:
-            try:
-                grouped_results = {}
-                for result in results:
-                    doc_type = result.get("document_type", "unknown")
-                    if doc_type not in grouped_results:
-                        grouped_results[doc_type] = []
-                    grouped_results[doc_type].append(result)
-
-                try:
-                    with open("results.json", "w", encoding="utf-8") as f:
-                        json.dump({
-                            "total_documents": len(results),
-                            "document_types": list(grouped_results.keys()),
-                            "results": grouped_results
-                        }, f, indent=2, ensure_ascii=False)
-                    print(f"✅ Processed {len(results)} documents and saved to results.json")
-                except Exception as e:
-                    logger.error(f"Error saving results to file: {str(e)}")
-                    raise
-            except Exception as e:
-                logger.error(f"Error grouping results: {str(e)}")
-                raise
-        else:
-            print("⚠️ No valid documents detected")
-
-    except Exception as e:
-        logger.error(f"Error in main function: {str(e)}")
-        print(f"❌ Error: {str(e)}")
-        sys.exit(1)
-
-if __name__ == "__main__":
-    main()

@@ -673,13 +673,624 @@ CONFIDENTIAL_DOCUMENT_TYPES = {
     'recreational_vehicle_certification', 'atv_safety_course', 'motorcycle_safety_course',
     'boating_safety_course', 'pwc_safety_course', 'sailing_certification', 'yacht_certification'
 }
+
+# ============================================================================
+# UNIFIED DOCUMENT PROCESSING PROMPT
+# ============================================================================
+
+UNIFIED_DOCUMENT_PROCESSING_PROMPT = """
+You are an advanced AI document processing expert capable of analyzing, extracting, and verifying document information in a single comprehensive analysis.
+
+**TASK**: Analyze the provided document text and perform complete document processing including:
+1. Document type detection and classification
+2. Comprehensive data extraction
+3. Document authenticity verification
+4. Quality assessment
+
+**INPUT TEXT**:
+{text}
+
+**PROCESSING INSTRUCTIONS**:
+
+### PHASE 1: DOCUMENT ANALYSIS & CLASSIFICATION
+Analyze the document to identify:
+- Document type (passport, license, aadhaar_card, pan_card, visa, etc.)
+- Document category (identity, legal, financial, educational, medical, business, government)
+- Issuing authority and jurisdiction
+- Document format and structure
+- Key identifying features and security elements
+
+### PHASE 2: COMPREHENSIVE DATA EXTRACTION - EXTRACT EVERYTHING POSSIBLE
+Extract ALL visible information including:
+- **Identification Numbers**: Document numbers, reference codes, serial numbers, batch numbers, control numbers
+- **Personal Information**: Full names, first/middle/last names, maiden names, aliases, dates of birth, ages, gender, marital status
+- **Contact Information**: Phone numbers, email addresses, websites, social media handles
+- **Address Information**: Complete addresses, street numbers, apartment/unit numbers, cities, states, postal codes, countries
+- **Official Information**: Issue dates, expiry dates, renewal dates, issuing authorities, office locations, officer names
+- **Document-Specific Fields**: License classes, endorsements, restrictions, nationality, citizenship, place of birth, blood type
+- **Security Features**: Watermarks, seals, signatures, QR codes, barcodes, holograms, security threads, microprinting
+- **Physical Characteristics**: Height, weight, eye color, hair color, distinguishing marks, photos present
+- **Professional Information**: Job titles, company names, departments, employee IDs, professional licenses, certifications
+- **Educational Information**: Schools, degrees, graduation dates, GPAs, honors, certifications, course details
+- **Financial Information**: Account numbers, amounts, balances, transaction details, tax information
+- **Technical Information**: File numbers, case numbers, application numbers, tracking numbers, version numbers
+- **Additional Context**: Any stamps, annotations, handwritten notes, corrections, amendments, endorsements
+
+### PHASE 3: DOCUMENT VERIFICATION & QUALITY ASSESSMENT
+Evaluate document authenticity by checking:
+- **Structure Validation**: Proper format, required fields presence, logical layout
+- **Data Consistency**: Date logic, field relationships, format compliance
+- **Quality Indicators**: Text clarity, professional formatting, official appearance
+- **Security Features**: Presence of expected security elements
+- **Authenticity Markers**: Official language, proper terminology, authority indicators
+
+**OUTPUT FORMAT** - Return a comprehensive JSON response:
+{{
+    "document_analysis": {{
+        "document_type": "specific_document_type",
+        "document_category": "primary_category",
+        "document_subtype": "specific_variant_if_applicable",
+        "issuing_authority": "detected_authority",
+        "issuing_country": "country_code_or_name",
+        "confidence_score": 0.0-1.0,
+        "key_indicators": ["list", "of", "identifying", "features"],
+        "processing_method": "text_analysis"
+    }},
+
+    "extracted_data": {{
+        "personal_information": {{
+            "full_name": "complete_name_as_appears",
+            "first_name": "first_name_if_separate",
+            "middle_name": "middle_name_if_present",
+            "last_name": "last_name_if_separate",
+            "maiden_name": "maiden_name_if_present",
+            "aliases": ["any", "other", "names"],
+            "title": "Mr/Ms/Dr_etc",
+            "suffix": "Jr/Sr/III_etc",
+            "date_of_birth": "YYYY-MM-DD",
+            "age": "calculated_or_stated_age",
+            "gender": "M/F/X/Male/Female",
+            "marital_status": "single/married/divorced_etc",
+            "nationality": "nationality_if_present",
+            "citizenship": "citizenship_if_different",
+            "place_of_birth": "birth_location",
+            "blood_type": "blood_type_if_present",
+            "height": "height_measurement",
+            "weight": "weight_measurement",
+            "eye_color": "eye_color_if_present",
+            "hair_color": "hair_color_if_present",
+            "distinguishing_marks": ["scars", "tattoos", "etc"],
+            "address": {{
+                "full_address": "complete_address_as_written",
+                "street_number": "house_number",
+                "street_name": "street_name",
+                "apartment_unit": "apt_unit_number",
+                "city": "city_name",
+                "state": "state_province",
+                "postal_code": "zip_postal_code",
+                "country": "country_name",
+                "county": "county_if_present",
+                "district": "district_if_present"
+            }},
+            "contact_information": {{
+                "phone_numbers": ["primary", "secondary", "mobile"],
+                "email_addresses": ["primary", "secondary"],
+                "websites": ["personal", "professional"],
+                "social_media": {{
+                    "linkedin": "linkedin_profile",
+                    "twitter": "twitter_handle",
+                    "facebook": "facebook_profile",
+                    "github": "github_profile",
+                    "other": ["other", "social", "profiles"]
+                }}
+            }}
+        }},
+
+        "document_identifiers": {{
+            "primary_number": "main_document_number",
+            "secondary_numbers": ["additional", "reference", "numbers"],
+            "control_number": "control_or_tracking_number",
+            "batch_number": "batch_or_series_number",
+            "serial_number": "serial_number_if_present",
+            "application_number": "application_reference",
+            "file_number": "file_or_case_number",
+            "registration_number": "registration_id",
+            "employee_id": "employee_identification",
+            "student_id": "student_identification",
+            "member_id": "membership_number",
+            "account_number": "account_identification",
+            "policy_number": "insurance_policy_number",
+            "license_plate": "vehicle_license_plate",
+            "vin_number": "vehicle_identification_number",
+            "barcode_data": "barcode_content_if_present",
+            "qr_code_data": "qr_content_if_present",
+            "magnetic_stripe_data": "magnetic_stripe_content",
+            "chip_data": "smart_chip_information",
+            "rfid_data": "rfid_tag_information"
+        }},
+
+        "validity_information": {{
+            "issue_date": "YYYY-MM-DD",
+            "expiry_date": "YYYY-MM-DD",
+            "valid_from": "YYYY-MM-DD",
+            "valid_until": "YYYY-MM-DD",
+            "renewal_date": "YYYY-MM-DD",
+            "last_updated": "YYYY-MM-DD",
+            "effective_date": "YYYY-MM-DD",
+            "termination_date": "YYYY-MM-DD",
+            "status": "active/expired/pending/suspended/revoked",
+            "validity_period": "duration_in_years_or_months",
+            "grace_period": "grace_period_if_applicable",
+            "renewal_required": true/false,
+            "auto_renewal": true/false,
+            "conditions": ["any", "validity", "conditions"],
+            "restrictions": ["any", "restrictions", "or", "limitations"]
+        }},
+
+        "document_specific_fields": {{
+            // Dynamic fields based on document type
+            // For license: "vehicle_class", "restrictions"
+            // For passport: "place_of_birth", "passport_type"
+            // For aadhaar: "enrollment_number", "masked_number"
+            // etc.
+        }},
+
+        "additional_information": {{
+            "signatures_present": true/false,
+            "photos_present": true/false,
+            "official_seals": ["list", "of", "seals"],
+            "watermarks": ["detected", "watermarks"],
+            "other_features": ["any", "other", "notable", "features"]
+        }}
+    }},
+
+    "verification_results": {{
+        "authenticity_assessment": {{
+            "is_likely_genuine": true/false,
+            "confidence_score": 0.0-1.0,
+            "risk_level": "low/medium/high",
+            "verification_status": "verified/suspicious/rejected"
+        }},
+
+        "quality_checks": {{
+            "structure_validation": {{
+                "passed": true/false,
+                "score": 0.0-1.0,
+                "details": "explanation_of_structure_assessment"
+            }},
+            "data_consistency": {{
+                "passed": true/false,
+                "score": 0.0-1.0,
+                "details": "explanation_of_consistency_checks"
+            }},
+            "format_compliance": {{
+                "passed": true/false,
+                "score": 0.0-1.0,
+                "details": "explanation_of_format_validation"
+            }},
+            "security_features": {{
+                "passed": true/false,
+                "score": 0.0-1.0,
+                "details": "explanation_of_security_assessment"
+            }}
+        }},
+
+        "flags_and_warnings": [
+            // List any concerns, inconsistencies, or suspicious elements
+        ],
+
+        "recommendations": [
+            // Suggestions for additional verification if needed
+        ]
+    }},
+
+    "processing_metadata": {{
+        "extraction_confidence": 0.0-1.0,
+        "text_quality": "excellent/good/fair/poor",
+        "completeness_score": 0.0-1.0,
+        "processing_notes": "any_additional_observations",
+        "suggested_manual_review": true/false,
+        "timestamp": "processing_timestamp_if_available"
+    }}
+}}
+
+**CRITICAL REQUIREMENTS**:
+1. **Accuracy**: Extract information exactly as it appears, preserve original formatting
+2. **Completeness**: Don't miss any visible information, even if it seems minor
+3. **Consistency**: Ensure all dates are in YYYY-MM-DD format, maintain data relationships
+4. **Verification**: Be thorough but fair in authenticity assessment
+5. **Adaptability**: Handle various document types and formats dynamically
+6. **Error Handling**: If information is unclear, note it in processing_notes rather than guessing
+
+**SPECIAL HANDLING**:
+- For **dates**: Convert to YYYY-MM-DD format, note original format if different
+- For **names**: Extract full names and split into components when possible
+- For **addresses**: Provide both full address and component breakdown
+- For **numbers**: Preserve exact formatting, note any special characters
+- For **unclear text**: Mark as "unclear" rather than making assumptions
+- For **missing fields**: Use null or "not_present" rather than empty strings
+
+**DOCUMENT TYPE SPECIFIC GUIDANCE**:
+- **Identity Documents**: Focus on personal identifiers, validity periods, issuing authority
+- **Financial Documents**: Extract amounts, dates, account information, transaction details
+- **Legal Documents**: Identify parties, dates, legal references, official seals
+- **Educational Documents**: Extract qualifications, institutions, dates, grades/scores
+- **Medical Documents**: Extract patient info, medical details, provider information
+- **Business Documents**: Extract company details, registration info, business identifiers
+- **Resume/CV Documents**: Extract personal info, contact details, work experience, education, skills, certifications, projects, achievements
+- **Professional Documents**: Extract job titles, company names, dates of employment, responsibilities, technologies used
+
+Analyze the provided text thoroughly and return the complete JSON response with all sections populated based on the available information.
+"""
+
+# Legacy prompts - replaced by UNIFIED_DOCUMENT_PROCESSING_PROMPT
+# Kept for backward compatibility, but redirect to unified prompt
+
+DOCUMENT_DETECTION_PROMPT = UNIFIED_DOCUMENT_PROCESSING_PROMPT
+DOCUMENT_EXTRACTION_PROMPT = UNIFIED_DOCUMENT_PROCESSING_PROMPT
+
+DOCUMENT_VERIFICATION_PROMPT = UNIFIED_DOCUMENT_PROCESSING_PROMPT
+
+# OCR Text Extraction Prompt
+OCR_TEXT_EXTRACTION_PROMPT = "Extract all text from this document image. Return only the raw text without any formatting."
+
+# Gemini Model Configuration
+GEMINI_DEFAULT_MODEL = "gemini-1.5-flash"
+GEMINI_PRO_MODEL = "gemini-1.5-pro"
+GEMINI_VISION_MODEL = "gemini-1.5-flash"
+
+# Gemini Generation Settings
+GEMINI_DEFAULT_TEMPERATURE = 0.1
+GEMINI_DEFAULT_TOP_P = 0.8
+GEMINI_DEFAULT_TOP_K = 40
+GEMINI_DEFAULT_MAX_TOKENS = 8192
+
+# Gemini Safety Settings
+GEMINI_SAFETY_THRESHOLD = "BLOCK_MEDIUM_AND_ABOVE"
+
+# ============================================================================
+# DOCUMENT PROCESSING CONSTANTS
+# ============================================================================
+
+# Confidence and Threshold Settings
 MIN_TEXT_LENGTH = 50
 MIN_CONFIDENCE_THRESHOLD = 0.4
 HIGH_CONFIDENCE_THRESHOLD = 0.8
 MIN_GENUINENESS_SCORE = 0.6
 VERIFICATION_THRESHOLD = 0.5
+
+# File Processing Constants
 SUPPORTED_EXTENSIONS = {'.pdf', '.docx', '.jpg', '.jpeg', '.png', '.tiff', '.bmp'}
-TEMPLATES_DIR = "D:\\imageextractor\\identites\\Templates"
+MAX_FILE_SIZE_MB = 50
+MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
+
+# OCR and Text Processing
+OCR_CONFIDENCE_THRESHOLD = 60
+MIN_OCR_TEXT_LENGTH = 10
+MAX_OCR_RETRIES = 3
+
+# Batch Processing Constants
+BATCH_SIZE = 50
+MAX_WORKERS = 4  # Adjust based on system capabilities
+CHUNK_SIZE = 1024 * 1024  # 1MB chunks for file reading
+MAX_RETRIES = 3
+TEMPLATE_SIMILARITY_THRESHOLD = 0.7
+
+# Processing Timeouts (in seconds)
+PROCESSING_TIMEOUT = 300  # 5 minutes
+OCR_TIMEOUT = 60  # 1 minute
+API_TIMEOUT = 30  # 30 seconds
+
+# Document Splitting and Chunking
+MAX_CHUNK_SIZE = 4000  # Maximum characters per chunk
+MIN_CHUNK_SIZE = 100   # Minimum characters per chunk
+CHUNK_OVERLAP = 200    # Overlap between chunks
+
+# ============================================================================
+# DOCUMENT TYPE MAPPINGS AND PATTERNS
+# ============================================================================
+
+# Document Type Mapping
+DOCUMENT_TYPE_MAPPING = {
+    "aadhaar": "aadhaar_card",
+    "aadhaarcard": "aadhaar_card",
+    "aadhar": "aadhaar_card",
+    "aadharcard": "aadhaar_card",
+    "pan": "pan_card",
+    "pancard": "pan_card",
+    "license": "license",
+    "driving license": "license",
+    "dl": "license",
+    "passport": "passport",
+    "visa": "visa",
+    "id": "national_id",
+    "identity": "national_id"
+}
+
+# Document Recognition Patterns
+DOCUMENT_PATTERNS = {
+    'license': [
+        r'(?i)license|dl|driving|permit|rto|dmv',
+        r'(?i)vehicle|motor|transport',
+        r'(?i)driver|driving'
+    ],
+    'aadhaar_card': [
+        r'(?i)aadhaar|aadhar|uidai|unique\s*id',
+        r'(?i)आधार|यूआईडीएआई'
+    ],
+    'pan_card': [
+        r'(?i)pan|permanent\s*account|income\s*tax',
+        r'(?i)tax\s*id|tax\s*number'
+    ],
+    'passport': [
+        r'(?i)passport|travel\s*doc|nationality',
+        r'(?i)immigration|border|customs'
+    ],
+    'visa': [
+        r'(?i)visa|entry\s*permit|travel\s*authorization',
+        r'(?i)embassy|consulate'
+    ]
+}
+
+# Field Extraction Patterns
+FIELD_PATTERNS = [
+    r'\{([^}]+)\}',
+    r'([^:]+):',
+    r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)'
+]
+
+# Document Separators for Multi-document Processing
+DOCUMENT_SEPARATORS = [
+    r'\n\s*\n\s*\n',
+    r'[-=]{3,}',
+    r'_{3,}',
+    r'\*{3,}',
+    r'Page \d+',
+    r'Document \d+',
+    r'Copy \d+',
+    r'Original',
+    r'Duplicate',
+    r'COPY',
+    r'ORIGINAL'
+]
+
+# ============================================================================
+# DOCUMENT CATEGORIES AND CLASSIFICATIONS
+# ============================================================================
+
+DOCUMENT_CATEGORIES = {
+    'identity': [
+        'passport', 'national_id', 'drivers_license', 'residence_permit',
+        'citizenship_card', 'voter_id', 'aadhaar_card', 'pan_card',
+        'social_security_card', 'health_insurance_card', 'student_id',
+        'employee_id', 'military_id', 'government_id', 'immigration_document',
+        'alien_registration_card', 'refugee_id', 'temporary_resident_card',
+        'work_permit', 'visa_document', 'border_crossing_card', 'travel_document',
+        'diplomatic_id', 'consular_id', 'maritime_id', 'aviation_id',
+        'professional_license', 'occupational_license', 'medical_license',
+        'law_license', 'teaching_license', 'engineering_license'
+    ],
+    'legal': [
+        'contract', 'agreement', 'deed', 'power_of_attorney',
+        'court_order', 'legal_notice', 'affidavit', 'will',
+        'trust_document', 'lease_agreement', 'employment_contract',
+        'non_disclosure_agreement', 'partnership_agreement'
+    ],
+    'financial': [
+        'bank_statement', 'tax_return', 'invoice', 'receipt',
+        'credit_card_statement', 'loan_document', 'insurance_policy',
+        'financial_statement', 'audit_report', 'investment_document',
+        'mortgage_document', 'credit_report'
+    ],
+    'educational': [
+        'degree_certificate', 'diploma', 'transcript', 'report_card',
+        'scholarship_document', 'academic_certificate', 'enrollment_certificate',
+        'graduation_certificate', 'course_completion_certificate'
+    ],
+    'medical': [
+        'medical_report', 'prescription', 'health_insurance',
+        'vaccination_record', 'medical_certificate', 'lab_report',
+        'discharge_summary', 'medical_history', 'treatment_plan'
+    ],
+    'business': [
+        'business_license', 'incorporation_document', 'tax_registration',
+        'commercial_invoice', 'shipping_document', 'purchase_order',
+        'quotation', 'business_registration', 'trade_license'
+    ],
+    'other': []
+}
+
+# ============================================================================
+# DOCUMENT FIELD TEMPLATES
+# ============================================================================
+
+DOCUMENT_FIELD_TEMPLATES = {
+    "aadhaar_card": {
+        "required_fields": ["aadhaar_number", "name", "date_of_birth", "gender", "address"],
+        "optional_fields": ["father_name", "photo", "qr_code"],
+        "field_patterns": {
+            "aadhaar_number": r'\b\d{4}\s*\d{4}\s*\d{4}\b',
+            "date_of_birth": r'\b\d{1,2}[/-]\d{1,2}[/-]\d{4}\b',
+            "gender": r'\b(Male|Female|M|F)\b'
+        }
+    },
+    "pan_card": {
+        "required_fields": ["pan_number", "name", "father_name", "date_of_birth"],
+        "optional_fields": ["photo", "signature"],
+        "field_patterns": {
+            "pan_number": r'\b[A-Z]{5}\d{4}[A-Z]\b',
+            "date_of_birth": r'\b\d{1,2}[/-]\d{1,2}[/-]\d{4}\b'
+        }
+    },
+    "license": {
+        "required_fields": ["license_number", "name", "date_of_birth", "address", "valid_from", "valid_until"],
+        "optional_fields": ["vehicle_class", "issuing_authority", "photo"],
+        "field_patterns": {
+            "license_number": r'\b[A-Z]{2}\d{2}\s*\d{11}\b',
+            "date_of_birth": r'\b\d{1,2}[/-]\d{1,2}[/-]\d{4}\b',
+            "valid_from": r'\b\d{1,2}[/-]\d{1,2}[/-]\d{4}\b',
+            "valid_until": r'\b\d{1,2}[/-]\d{1,2}[/-]\d{4}\b'
+        }
+    },
+    "passport": {
+        "required_fields": ["passport_number", "surname", "given_names", "nationality", "date_of_birth", "place_of_birth"],
+        "optional_fields": ["date_of_issue", "date_of_expiry", "issuing_authority", "photo"],
+        "field_patterns": {
+            "passport_number": r'\b[A-Z]\d{7}\b',
+            "date_of_birth": r'\b\d{1,2}[/-]\d{1,2}[/-]\d{4}\b',
+            "date_of_issue": r'\b\d{1,2}[/-]\d{1,2}[/-]\d{4}\b',
+            "date_of_expiry": r'\b\d{1,2}[/-]\d{1,2}[/-]\d{4}\b'
+        }
+    },
+    "resume": {
+        "required_fields": ["name", "contact_information"],
+        "optional_fields": ["email", "phone", "address", "linkedin", "portfolio", "summary", "experience", "education", "skills", "certifications", "projects", "achievements"],
+        "field_patterns": {
+            "email": r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
+            "phone": r'\b[\+]?[1-9][\d\s\-\(\)]{7,15}\b',
+            "linkedin": r'linkedin\.com/in/[\w\-]+',
+            "portfolio": r'(behance\.net|dribbble\.com|github\.com)/[\w\-]+',
+            "website": r'https?://[\w\-\.]+\.[a-z]{2,}'
+        }
+    },
+    "cv": {
+        "required_fields": ["name", "contact_information"],
+        "optional_fields": ["email", "phone", "address", "linkedin", "portfolio", "summary", "experience", "education", "skills", "certifications", "projects", "achievements", "publications", "references"],
+        "field_patterns": {
+            "email": r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
+            "phone": r'\b[\+]?[1-9][\d\s\-\(\)]{7,15}\b',
+            "linkedin": r'linkedin\.com/in/[\w\-]+',
+            "portfolio": r'(behance\.net|dribbble\.com|github\.com)/[\w\-]+',
+            "website": r'https?://[\w\-\.]+\.[a-z]{2,}'
+        }
+    }
+}
+
+# ============================================================================
+# DOCUMENT INDICATORS AND KEYWORDS
+# ============================================================================
+
+DOCUMENT_INDICATORS = {
+    "aadhaar_card": [
+        "aadhaar", "aadhar", "uidai", "unique identification",
+        "आधार", "यूआईडीएआई", "12-digit", "enrollment number"
+    ],
+    "pan_card": [
+        "pan", "permanent account number", "income tax",
+        "tax identification", "10-character", "alphanumeric"
+    ],
+    "license": [
+        "driving license", "dl", "license number", "vehicle class",
+        "rto", "dmv", "transport authority", "driving permit"
+    ],
+    "passport": [
+        "passport", "travel document", "nationality", "immigration",
+        "border control", "embassy", "consulate", "visa"
+    ]
+}
+
+# Content Quality Indicators
+CONTENT_INDICATORS = {
+    "high_quality": [
+        "clear text", "readable", "official format", "proper structure",
+        "complete information", "valid dates", "consistent formatting"
+    ],
+    "low_quality": [
+        "blurry", "unclear", "incomplete", "damaged", "poor scan",
+        "missing information", "illegible", "corrupted"
+    ]
+}
+
+# Non-genuine Document Indicators
+NON_GENUINE_INDICATORS = [
+    "photocopy", "duplicate", "sample", "specimen", "template",
+    "watermark missing", "poor quality", "inconsistent fonts",
+    "misaligned text", "color variations", "pixelated image"
+]
+
+# ============================================================================
+# OCR AND ERROR HANDLING CONSTANTS
+# ============================================================================
+
+# OCR Error Patterns
+OCR_ERROR_PATTERNS = [
+    r'[^\w\s\.\,\-\(\)\[\]\{\}]',  # Unusual characters
+    r'\b[a-zA-Z]{1}\b',            # Single characters
+    r'\d{20,}',                    # Very long numbers
+    r'[A-Z]{10,}',                 # Very long uppercase strings
+    r'[a-z]{15,}'                  # Very long lowercase strings
+]
+
+# Character Patterns for Validation
+CHARACTER_PATTERNS = {
+    "alphanumeric": r'^[a-zA-Z0-9\s\-\.]+$',
+    "numeric": r'^\d+$',
+    "alphabetic": r'^[a-zA-Z\s]+$',
+    "date": r'^\d{1,2}[/-]\d{1,2}[/-]\d{4}$',
+    "email": r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+    "phone": r'^[\+]?[1-9][\d]{0,15}$'
+}
+
+# Error Messages
+ERROR_MESSAGES = {
+    "file_not_found": "File not found or inaccessible",
+    "unsupported_format": "Unsupported file format",
+    "processing_failed": "Document processing failed",
+    "ocr_failed": "OCR text extraction failed",
+    "api_error": "API request failed",
+    "timeout_error": "Processing timeout exceeded",
+    "invalid_document": "Invalid or corrupted document",
+    "low_confidence": "Low confidence in extraction results"
+}
+
+# Status Codes
+STATUS_CODES = {
+    "success": "success",
+    "error": "error",
+    "warning": "warning",
+    "rejected": "rejected",
+    "pending": "pending",
+    "processing": "processing",
+    "completed": "completed",
+    "failed": "failed"
+}
+
+# ============================================================================
+# DIRECTORY AND PATH CONSTANTS
+# ============================================================================
+
+# Default Directories
+DEFAULT_TEMPLATES_DIR = "D:\\imageextractor\\identites\\Templates"
+TEMPLATES_DIR = DEFAULT_TEMPLATES_DIR  # Backward compatibility
+DEFAULT_OUTPUT_DIR = "results"
+DEFAULT_TEMP_DIR = "temp"
+DEFAULT_LOGS_DIR = "logs"
+
+# File Extensions by Category
+IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.tiff', '.bmp', '.gif', '.webp'}
+DOCUMENT_EXTENSIONS = {'.pdf', '.docx', '.doc', '.txt', '.rtf'}
+ALL_SUPPORTED_EXTENSIONS = IMAGE_EXTENSIONS | DOCUMENT_EXTENSIONS
+
+# ============================================================================
+# LOGGING AND DEBUG CONSTANTS
+# ============================================================================
+
+# Log Levels
+LOG_LEVELS = {
+    "DEBUG": 10,
+    "INFO": 20,
+    "WARNING": 30,
+    "ERROR": 40,
+    "CRITICAL": 50
+}
+
+# Debug Flags
+DEBUG_FLAGS = {
+    "save_intermediate_images": False,
+    "verbose_logging": False,
+    "save_extracted_text": False,
+    "profile_performance": False
+}
 
 
 CLASSIFICATION_PROMPT = """

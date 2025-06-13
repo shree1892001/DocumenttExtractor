@@ -19,12 +19,11 @@ import hashlib
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Constants for batch processing
-BATCH_SIZE = 50  # Number of documents to process in each batch
-MAX_WORKERS = multiprocessing.cpu_count()  # Number of parallel workers
-CHUNK_SIZE = 1024 * 1024  # 1MB chunks for file reading
-MAX_RETRIES = 3  # Maximum number of retries for failed documents
-TEMPLATE_SIMILARITY_THRESHOLD = 0.7  # Minimum similarity score to consider as template match
+# Import constants from central constants file
+from Common.constants import (
+    BATCH_SIZE, MAX_WORKERS, CHUNK_SIZE, MAX_RETRIES,
+    TEMPLATE_SIMILARITY_THRESHOLD, SUPPORTED_EXTENSIONS
+)
 
 @dataclass
 class ProcessingResult:
@@ -328,7 +327,7 @@ class BatchProcessor:
         """Get list of files to process"""
         files = []
         if file_patterns is None:
-            file_patterns = ['.pdf', '.docx', '.jpg', '.jpeg', '.png', '.tiff', '.bmp']
+            file_patterns = list(SUPPORTED_EXTENSIONS)
             
         for pattern in file_patterns:
             files.extend(list(Path(input_dir).rglob(f"*{pattern}")))

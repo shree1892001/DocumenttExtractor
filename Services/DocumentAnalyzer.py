@@ -160,9 +160,10 @@ class DocumentFeatures:
 
 class DocumentAnalyzer:
     def __init__(self, api_key: str):
+        from Common.gemini_config import GeminiConfig
         self.api_key = api_key
-        genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel('gemini-1.5-flash')
+        self.config = GeminiConfig.create_text_processor_config(api_key)
+        self.model = self.config.get_model()
         self.analysis_cache: Dict[str, Dict[str, Any]] = {}
         self.cache_lock = threading.Lock()
         

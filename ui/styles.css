@@ -867,8 +867,10 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    padding: 10px 0;
+    padding: 15px;
     border-bottom: 1px solid #ecf0f1;
+    flex-wrap: wrap;
+    gap: 10px;
 }
 
 .extracted-field:last-child {
@@ -878,16 +880,20 @@ body {
 .field-name {
     font-weight: 600;
     color: #2c3e50;
-    flex: 0 0 40%;
+    flex: 0 0 200px;
     margin-right: 15px;
 }
 
 .field-value {
     color: #7f8c8d;
-    text-align: right;
     flex: 1;
+    min-width: 250px;
     word-wrap: break-word;
-    line-height: 1.4;
+    word-break: break-word;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    text-align: left;
 }
 
 .field-value strong {
@@ -902,12 +908,13 @@ body {
 
 /* Nested object styling */
 .field-value div {
-    margin-top: 5px;
+    margin: 5px 0;
+    padding-left: 15px;
 }
 
 .field-value div strong {
     color: #2c3e50;
-    font-size: 0.9em;
+    font-size: 0.95em;
 }
 
 /* Confidence badge styling */
@@ -918,6 +925,7 @@ body {
     border-radius: 3px;
     font-size: 0.8em;
     font-weight: 600;
+    vertical-align: top;
 }
 
 .field-value small.success {
@@ -933,6 +941,19 @@ body {
 .field-value small.error {
     background-color: #f8d7da;
     color: #721c24;
+}
+
+/* Add styles for JSON formatting */
+.json-content {
+    background: #f8f9fa;
+    padding: 10px;
+    border-radius: 4px;
+    margin: 5px 0;
+    font-family: monospace;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    max-width: 100%;
+    overflow-x: auto;
 }
 
 .action-buttons {

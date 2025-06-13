@@ -16,22 +16,11 @@ from Common.document_constants import (
 logger = logging.getLogger(__name__)
 
 class TemplateMatcher:
-    document_type_mapping = {
-        "aadhaar": "aadhaar_card",
-        "aadhaarcard": "aadhaar_card",
-        "aadhar": "aadhaar_card",
-        "aadharcard": "aadhaar_card",
-        "pan": "pan_card",
-        "pancard": "pan_card",
-        "license": "license",
-        "driving license": "license",
-        "dl": "license"
-    }
-
-    SUPPORTED_EXTENSIONS = {'.docx', '.pdf', '.jpg', '.jpeg', '.png', '.tiff', '.bmp'}
-
-    MIN_CONFIDENCE_THRESHOLD = 0.4
-    HIGH_CONFIDENCE_THRESHOLD = 0.8
+    # Use constants from central constants file
+    document_type_mapping = DOCUMENT_TYPE_MAPPING
+    SUPPORTED_EXTENSIONS = SUPPORTED_EXTENSIONS
+    MIN_CONFIDENCE_THRESHOLD = MIN_CONFIDENCE_THRESHOLD
+    HIGH_CONFIDENCE_THRESHOLD = HIGH_CONFIDENCE_THRESHOLD
 
     def __init__(self, api_key: str, templates_dir: str = "D:\\imageextractor\\identites\\Templates"):
         self.templates_dir = templates_dir
