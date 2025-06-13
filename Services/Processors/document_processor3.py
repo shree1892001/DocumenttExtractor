@@ -288,30 +288,53 @@ class DocumentProcessor3:
         return "unknown"
 
     def process_document(self, file_path: str) -> Optional[List[Dict[str, Any]]]:
-        """Process document and extract information"""
+        """Process document and extract information with enhanced error handling"""
         try:
             # Extract text from document
             extracted_text = self.extract_text_from_pdf(file_path)
-            
+
+            if not extracted_text or len(extracted_text.strip()) < 10:
+                logger.warning(f"Very little text extracted from {file_path}")
+                extracted_text = f"[Minimal text extracted from {os.path.basename(file_path)}]"
+
             # Extract fields from text
             extracted_fields = self.extract_fields_from_text(extracted_text)
-            
+
             # Detect document type
             document_type = self.detect_document_type(extracted_text)
-            
-            # Create result
+
+            # Create result with processing status
             result = {
                 "document_type": document_type,
                 "extracted_text": extracted_text,
                 "extracted_fields": extracted_fields,
                 "metadata": {
                     "file_path": file_path,
-                    "file_type": os.path.splitext(file_path)[1].lower().replace('.', '')
+                    "file_type": os.path.splitext(file_path)[1].lower().replace('.', ''),
+                    "processing_status": "success",
+                    "text_length": len(extracted_text),
+                    "fields_count": len(extracted_fields)
                 }
             }
-            
+
             return [result]
-            
+
         except Exception as e:
             logger.error(f"Error processing document: {str(e)}")
-            raise ValueError(f"Failed to process document: {str(e)}") 
+
+            # Return a minimal result instead of failing completely
+            error_result = {
+                "document_type": "unknown",
+                "extracted_text": f"[Error processing document: {str(e)}]",
+                "extracted_fields": {},
+                "metadata": {
+                    "file_path": file_path,
+                    "file_type": os.path.splitext(file_path)[1].lower().replace('.', ''),
+                    "processing_status": "error",
+                    "error_message": str(e),
+                    "text_length": 0,
+                    "fields_count": 0
+                }
+            }
+
+            return [error_result]

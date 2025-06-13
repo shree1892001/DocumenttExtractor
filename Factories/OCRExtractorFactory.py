@@ -14,49 +14,38 @@ class BaseOCRExtractor(ABC):
     """Base class for OCR extractors"""
     
     def preprocess_image(self, image: np.ndarray) -> List[np.ndarray]:
-        """Preprocess image for better OCR results"""
-        try:
-            processed_images = []
-            
-            # Convert to grayscale if needed
-            if len(image.shape) == 3:
-                gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            else:
-                gray = image.copy()
-            
-            # Add original grayscale
-            processed_images.append(gray)
-            
-            # Apply adaptive thresholding
-            thresh = cv2.adaptiveThreshold(
-                gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                cv2.THRESH_BINARY, 11, 2
-            )
-            processed_images.append(thresh)
-            
-            # Apply Otsu's thresholding
-            _, otsu = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-            processed_images.append(otsu)
-            
-            # Denoise
-            denoised = cv2.fastNlMeansDenoising(gray)
-            processed_images.append(denoised)
-            
-            # Increase contrast using CLAHE
-            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-            enhanced = clahe.apply(gray)
-            processed_images.append(enhanced)
-            
-            # Apply morphological operations
-            kernel = np.ones((1, 1), np.uint8)
-            dilated = cv2.dilate(gray, kernel, iterations=1)
-            eroded = cv2.erode(gray, kernel, iterations=1)
-            processed_images.extend([dilated, eroded])
-            
-            return processed_images
-        except Exception as e:
-            logger.error(f"Error preprocessing image: {str(e)}")
-            return [image]
+        """Apply various preprocessing techniques to improve OCR accuracy"""
+        processed_images = []
+        
+        # Original image
+        processed_images.append(image.copy())
+        
+        # Convert to grayscale if needed
+        if len(image.shape) == 3:
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        else:
+            gray = image.copy()
+        processed_images.append(gray)
+        
+        # Apply thresholding
+        _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        processed_images.append(thresh)
+        
+        # Apply adaptive thresholding
+        adaptive_thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                                              cv2.THRESH_BINARY, 11, 2)
+        processed_images.append(adaptive_thresh)
+        
+        # Apply noise reduction
+        denoised = cv2.fastNlMeansDenoising(gray, None, 10, 7, 21)
+        processed_images.append(denoised)
+        
+        # Apply sharpening
+        kernel = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
+        sharpened = cv2.filter2D(gray, -1, kernel)
+        processed_images.append(sharpened)
+        
+        return processed_images
 
     def detect_text_regions(self, image: np.ndarray) -> List[Tuple[int, int, int, int]]:
         """Detect regions containing text"""
@@ -101,22 +90,28 @@ class BaseOCRExtractor(ABC):
             
             # Try different PSM modes and languages
             best_text = ""
-            languages = ['eng', 'eng+fra', 'eng+deu']
+            languages = ['eng', 'eng+fra', 'eng+deu', 'eng+osd']
+            psm_modes = [psm_mode, 3, 4, 6, 7, 11, 12]  # Try multiple PSM modes
             
             for processed_img in processed_images:
                 for lang in languages:
-                    config = f'--oem 3 --psm {psm_mode} -l {lang}'
-                    try:
-                        text = pytesseract.image_to_string(
-                            processed_img,
-                            config=config
-                        )
-                        if len(text.strip()) > len(best_text.strip()):
-                            best_text = text
-                    except Exception as e:
-                        logger.warning(f"OCR failed for PSM {psm_mode} and language {lang}: {str(e)}")
+                    for psm in psm_modes:
+                        config = f'--oem 3 --psm {psm} -l {lang}'
+                        try:
+                            text = pytesseract.image_to_string(
+                                processed_img,
+                                config=config
+                            )
+                            # Score the text quality based on length and content
+                            score = self._score_text_quality(text)
+                            current_score = self._score_text_quality(best_text)
+                            
+                            if score > current_score:
+                                best_text = text
+                        except Exception as e:
+                            logger.warning(f"OCR failed for PSM {psm} and language {lang}: {str(e)}")
             
-            return best_text.strip()
+            return best_text
         except Exception as e:
             logger.error(f"Error extracting text from region: {str(e)}")
             return ""

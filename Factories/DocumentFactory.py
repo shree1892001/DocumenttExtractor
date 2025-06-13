@@ -398,8 +398,29 @@ class DocxTextExtractor(BaseTextExtractor):
             raise
 
     def process_with_gemini(self, image_path: str, prompt: str) -> str:
-        """Process image with Gemini Vision"""
+        """Process image with Gemini Vision with improved prompt for driving licenses"""
         try:
+            # Check if input is a driving license based on filename or content
+            is_license = 'license' in image_path.lower() or 'licence' in image_path.lower()
+            
+            # Use specialized prompt for driving licenses
+            if is_license:
+                prompt = """
+                Extract all text from this driving license document.
+                Format the response as a structured list of key-value pairs.
+                Be precise with numbers, dates, and names.
+                Include:
+                - Full name (exactly as shown)
+                - Date of birth (in original format)
+                - License number (all digits and letters)
+                - Address (complete address as shown)
+                - Issue date and expiry date
+                - Categories/classes of vehicles
+                - Any other visible information
+                
+                Ensure accuracy of all extracted text.
+                """
+            
             # Verify image file exists and is readable
             if not os.path.exists(image_path):
                 raise FileNotFoundError(f"Image file not found at path: {image_path}")

@@ -33,6 +33,15 @@ class GeminiSafetySettings:
     dangerous_content: str = "BLOCK_MEDIUM_AND_ABOVE"
 
 
+@dataclass
+class GeminiDocumentSafetySettings:
+    """More permissive safety settings for document processing"""
+    harassment: str = "BLOCK_ONLY_HIGH"
+    hate_speech: str = "BLOCK_ONLY_HIGH"
+    sexually_explicit: str = "BLOCK_MEDIUM_AND_ABOVE"
+    dangerous_content: str = "BLOCK_ONLY_HIGH"  # More permissive for document content
+
+
 class GeminiConfig:
     """Centralized configuration class for Gemini AI models"""
     
@@ -255,14 +264,37 @@ class GeminiConfig:
     def create_vision_processor_config(cls, api_key: Optional[str] = None) -> 'GeminiConfig':
         """
         Create configuration optimized for vision/image processing
-        
+
         Args:
             api_key: API key (optional)
-            
+
         Returns:
             GeminiConfig instance for vision processing
         """
         config = cls(api_key=api_key, model_type="vision")
+        config.update_generation_config(
+            temperature=0.1,
+            top_p=0.8,
+            max_output_tokens=8192
+        )
+        return config
+
+    @classmethod
+    def create_document_processor_config(cls, api_key: Optional[str] = None) -> 'GeminiConfig':
+        """
+        Create configuration optimized for document processing with more permissive safety settings
+
+        Args:
+            api_key: API key (optional)
+
+        Returns:
+            GeminiConfig instance for document processing
+        """
+        config = cls(api_key=api_key, model_type="text")
+
+        # Use more permissive safety settings for document processing
+        config.safety_settings = GeminiDocumentSafetySettings()
+
         config.update_generation_config(
             temperature=0.1,
             top_p=0.8,

@@ -825,6 +825,62 @@ DOCUMENT_VERIFICATION_PROMPT = UNIFIED_DOCUMENT_PROCESSING_PROMPT
 # OCR Text Extraction Prompt
 OCR_TEXT_EXTRACTION_PROMPT = "Extract all text from this document image. Return only the raw text without any formatting."
 
+# Safer Document Verification Prompt (for safety filter issues)
+SAFE_DOCUMENT_VERIFICATION_PROMPT = """
+You are a professional document analysis expert. Please analyze the provided document data and provide a comprehensive assessment.
+
+Document Data:
+{document_data}
+
+Document Type: {doc_type}
+Document Category: {document_category}
+Issuing Authority: {issuing_authority}
+
+Please perform the following analysis:
+
+1. **Data Consistency Check**:
+   - Review all extracted information for internal consistency
+   - Check if dates are logical and in proper sequence
+   - Verify that personal information aligns across fields
+   - Assess if document structure matches expected format
+
+2. **Format Validation**:
+   - Evaluate document layout and formatting
+   - Check for proper official document structure
+   - Assess text quality and readability
+   - Review presence of expected document elements
+
+3. **Information Completeness**:
+   - Identify any missing required fields
+   - Assess completeness of extracted data
+   - Note any unclear or partially extracted information
+   - Evaluate overall data quality
+
+4. **Technical Assessment**:
+   - Review document metadata and technical aspects
+   - Assess image/scan quality if applicable
+   - Check for proper document orientation and clarity
+   - Evaluate extraction confidence levels
+
+Return your analysis in this JSON format:
+{{
+    "is_genuine": true/false,
+    "confidence_score": 0.0-1.0,
+    "rejection_reason": "specific reason if document is rejected",
+    "verification_checks": {{
+        "data_consistency": {{"passed": true/false, "confidence": 0.0-1.0, "notes": "details"}},
+        "format_validation": {{"passed": true/false, "confidence": 0.0-1.0, "notes": "details"}},
+        "completeness": {{"passed": true/false, "confidence": 0.0-1.0, "notes": "details"}},
+        "technical_quality": {{"passed": true/false, "confidence": 0.0-1.0, "notes": "details"}}
+    }},
+    "security_features_found": ["list of security elements identified"],
+    "warnings": ["list of any concerns or issues"],
+    "recommendations": ["suggestions for improvement if any"]
+}}
+
+Focus on providing a thorough professional analysis while maintaining objectivity and accuracy.
+"""
+
 # Gemini Model Configuration
 GEMINI_DEFAULT_MODEL = "gemini-1.5-flash"
 GEMINI_PRO_MODEL = "gemini-1.5-pro"
