@@ -679,236 +679,127 @@ CONFIDENTIAL_DOCUMENT_TYPES = {
 # ============================================================================
 
 UNIFIED_DOCUMENT_PROCESSING_PROMPT = """
-You are an advanced AI document processing expert capable of analyzing, extracting, and verifying document information in a single comprehensive analysis.
+You are an advanced AI document processing expert. Your task is to extract EVERY SINGLE PIECE OF INFORMATION from the provided document text.
 
-**TASK**: Analyze the provided document text and perform complete document processing including:
-1. Document type detection and classification
-2. Comprehensive data extraction
-3. Document authenticity verification
-4. Quality assessment
+**CRITICAL INSTRUCTION**: Extract ALL data present in the document - do not limit yourself to specific formats or expected fields. Extract everything you can see, read, or identify.
 
 **INPUT TEXT**:
 {text}
 
-**PROCESSING INSTRUCTIONS**:
+**EXTRACTION APPROACH**:
+1. Read through the ENTIRE document text carefully
+2. Extract EVERY piece of information, no matter how small or seemingly unimportant
+3. Include ALL text, numbers, dates, names, addresses, codes, references, etc.
+4. Do NOT skip anything - extract everything visible
+5. Create field names dynamically based on what you find
+6. Extract partial information even if incomplete
+7. Include unclear text with notes
 
-### PHASE 1: DOCUMENT ANALYSIS & CLASSIFICATION
-Analyze the document to identify:
-- Document type (passport, license, aadhaar_card, pan_card, visa, etc.)
-- Document category (identity, legal, financial, educational, medical, business, government)
-- Issuing authority and jurisdiction
-- Document format and structure
-- Key identifying features and security elements
+**WHAT TO EXTRACT**:
+Extract EVERYTHING you can identify from the document:
 
-### PHASE 2: COMPREHENSIVE DATA EXTRACTION - EXTRACT EVERYTHING POSSIBLE
-Extract ALL visible information including:
-- **Identification Numbers**: Document numbers, reference codes, serial numbers, batch numbers, control numbers
-- **Personal Information**: Full names, first/middle/last names, maiden names, aliases, dates of birth, ages, gender, marital status
-- **Contact Information**: Phone numbers, email addresses, websites, social media handles
-- **Address Information**: Complete addresses, street numbers, apartment/unit numbers, cities, states, postal codes, countries
-- **Official Information**: Issue dates, expiry dates, renewal dates, issuing authorities, office locations, officer names
-- **Document-Specific Fields**: License classes, endorsements, restrictions, nationality, citizenship, place of birth, blood type
-- **Security Features**: Watermarks, seals, signatures, QR codes, barcodes, holograms, security threads, microprinting
-- **Physical Characteristics**: Height, weight, eye color, hair color, distinguishing marks, photos present
-- **Professional Information**: Job titles, company names, departments, employee IDs, professional licenses, certifications
-- **Educational Information**: Schools, degrees, graduation dates, GPAs, honors, certifications, course details
-- **Financial Information**: Account numbers, amounts, balances, transaction details, tax information
-- **Technical Information**: File numbers, case numbers, application numbers, tracking numbers, version numbers
-- **Additional Context**: Any stamps, annotations, handwritten notes, corrections, amendments, endorsements
+1. **ALL TEXT CONTENT**: Every word, phrase, sentence, paragraph, heading, label, caption
+2. **ALL NUMBERS**: Document numbers, ID numbers, phone numbers, amounts, dates, codes, references, serial numbers
+3. **ALL NAMES**: Person names, company names, organization names, place names, product names, service names
+4. **ALL DATES**: Issue dates, expiry dates, birth dates, employment dates, any date mentioned
+5. **ALL ADDRESSES**: Complete addresses, partial addresses, cities, states, countries, postal codes
+6. **ALL CONTACT INFO**: Phone numbers, email addresses, websites, fax numbers, social media
+7. **ALL IDENTIFIERS**: License numbers, passport numbers, account numbers, employee IDs, case numbers
+8. **ALL AMOUNTS**: Money amounts, quantities, measurements, percentages, scores, ratings
+9. **ALL TECHNICAL DATA**: File numbers, version numbers, batch codes, serial numbers, barcodes, QR codes
+10. **ALL DESCRIPTIVE INFO**: Job titles, descriptions, qualifications, skills, characteristics, features
+11. **ALL ORGANIZATIONAL INFO**: Departments, divisions, branches, offices, institutions, authorities
+12. **ALL SECURITY FEATURES**: Watermarks, seals, signatures, stamps, holograms, security elements
+13. **ALL ADDITIONAL CONTENT**: Notes, comments, annotations, corrections, amendments, endorsements
 
-### PHASE 3: DOCUMENT VERIFICATION & QUALITY ASSESSMENT
-Evaluate document authenticity by checking:
-- **Structure Validation**: Proper format, required fields presence, logical layout
-- **Data Consistency**: Date logic, field relationships, format compliance
-- **Quality Indicators**: Text clarity, professional formatting, official appearance
-- **Security Features**: Presence of expected security elements
-- **Authenticity Markers**: Official language, proper terminology, authority indicators
+**EXTRACTION RULES**:
+- Extract information EXACTLY as it appears in the document
+- Do NOT reformat or standardize - preserve original formatting
+- Include ALL variations of the same information if present multiple times
+- Extract partial information even if incomplete
+- Include unclear or questionable text with a note that it's unclear
+- Extract everything, even if you're not sure what it represents
 
-**OUTPUT FORMAT** - Return a comprehensive JSON response:
+**OUTPUT FORMAT** - Return ALL extracted data in this flexible JSON structure:
 {{
     "document_analysis": {{
-        "document_type": "specific_document_type",
-        "document_category": "primary_category",
-        "document_subtype": "specific_variant_if_applicable",
-        "issuing_authority": "detected_authority",
-        "issuing_country": "country_code_or_name",
+        "document_type": "best_guess_document_type_or_unknown",
         "confidence_score": 0.0-1.0,
-        "key_indicators": ["list", "of", "identifying", "features"],
-        "processing_method": "text_analysis"
+        "processing_method": "comprehensive_extraction"
     }},
 
     "extracted_data": {{
-        "personal_information": {{
-            "full_name": "complete_name_as_appears",
-            "first_name": "first_name_if_separate",
-            "middle_name": "middle_name_if_present",
-            "last_name": "last_name_if_separate",
-            "maiden_name": "maiden_name_if_present",
-            "aliases": ["any", "other", "names"],
-            "title": "Mr/Ms/Dr_etc",
-            "suffix": "Jr/Sr/III_etc",
-            "date_of_birth": "YYYY-MM-DD",
-            "age": "calculated_or_stated_age",
-            "gender": "M/F/X/Male/Female",
-            "marital_status": "single/married/divorced_etc",
-            "nationality": "nationality_if_present",
-            "citizenship": "citizenship_if_different",
-            "place_of_birth": "birth_location",
-            "blood_type": "blood_type_if_present",
-            "height": "height_measurement",
-            "weight": "weight_measurement",
-            "eye_color": "eye_color_if_present",
-            "hair_color": "hair_color_if_present",
-            "distinguishing_marks": ["scars", "tattoos", "etc"],
-            "address": {{
-                "full_address": "complete_address_as_written",
-                "street_number": "house_number",
-                "street_name": "street_name",
-                "apartment_unit": "apt_unit_number",
-                "city": "city_name",
-                "state": "state_province",
-                "postal_code": "zip_postal_code",
-                "country": "country_name",
-                "county": "county_if_present",
-                "district": "district_if_present"
-            }},
-            "contact_information": {{
-                "phone_numbers": ["primary", "secondary", "mobile"],
-                "email_addresses": ["primary", "secondary"],
-                "websites": ["personal", "professional"],
-                "social_media": {{
-                    "linkedin": "linkedin_profile",
-                    "twitter": "twitter_handle",
-                    "facebook": "facebook_profile",
-                    "github": "github_profile",
-                    "other": ["other", "social", "profiles"]
-                }}
-            }}
-        }},
+        // EXTRACT EVERYTHING - Create field names dynamically for whatever you find
+        // Do NOT limit yourself to the examples below - extract ALL information present
 
-        "document_identifiers": {{
-            "primary_number": "main_document_number",
-            "secondary_numbers": ["additional", "reference", "numbers"],
-            "control_number": "control_or_tracking_number",
-            "batch_number": "batch_or_series_number",
-            "serial_number": "serial_number_if_present",
-            "application_number": "application_reference",
-            "file_number": "file_or_case_number",
-            "registration_number": "registration_id",
-            "employee_id": "employee_identification",
-            "student_id": "student_identification",
-            "member_id": "membership_number",
-            "account_number": "account_identification",
-            "policy_number": "insurance_policy_number",
-            "license_plate": "vehicle_license_plate",
-            "vin_number": "vehicle_identification_number",
-            "barcode_data": "barcode_content_if_present",
-            "qr_code_data": "qr_content_if_present",
-            "magnetic_stripe_data": "magnetic_stripe_content",
-            "chip_data": "smart_chip_information",
-            "rfid_data": "rfid_tag_information"
-        }},
+        // INSTRUCTIONS:
+        // 1. For every piece of information you find, create a descriptive field name
+        // 2. Extract the value exactly as it appears in the document
+        // 3. If you find multiple instances of similar data, use numbered fields (e.g., "Phone 1", "Phone 2")
+        // 4. If information is unclear, include it with a note (e.g., "Name (unclear): possible_name")
+        // 5. Extract everything - names, numbers, dates, addresses, codes, amounts, descriptions, etc.
 
-        "validity_information": {{
-            "issue_date": "YYYY-MM-DD",
-            "expiry_date": "YYYY-MM-DD",
-            "valid_from": "YYYY-MM-DD",
-            "valid_until": "YYYY-MM-DD",
-            "renewal_date": "YYYY-MM-DD",
-            "last_updated": "YYYY-MM-DD",
-            "effective_date": "YYYY-MM-DD",
-            "termination_date": "YYYY-MM-DD",
-            "status": "active/expired/pending/suspended/revoked",
-            "validity_period": "duration_in_years_or_months",
-            "grace_period": "grace_period_if_applicable",
-            "renewal_required": true/false,
-            "auto_renewal": true/false,
-            "conditions": ["any", "validity", "conditions"],
-            "restrictions": ["any", "restrictions", "or", "limitations"]
-        }},
+        // EXAMPLES (but extract EVERYTHING you find):
+        // Names: "Name", "First Name", "Last Name", "Father Name", "Mother Name", "Spouse Name", "Guardian Name", "Next of Kin", etc.
+        // Dates: "Date of Birth", "Issue Date", "Expiry Date", "Valid From", "Valid Until", "Renewal Date", "Application Date", etc.
+        // Numbers: "Document Number", "ID Number", "License Number", "Passport Number", "Account Number", "Reference Number", etc.
+        // Addresses: "Address", "Permanent Address", "Current Address", "Office Address", "Mailing Address", etc.
+        // Contact: "Phone", "Mobile", "Email", "Fax", "Website", "Social Media", etc.
+        // Personal: "Gender", "Age", "Height", "Weight", "Blood Type", "Eye Color", "Hair Color", "Nationality", etc.
+        // Professional: "Job Title", "Company", "Department", "Salary", "Employee ID", "Designation", etc.
+        // Educational: "School", "College", "University", "Degree", "Grade", "Percentage", "Year of Passing", etc.
+        // Financial: "Amount", "Balance", "Income", "Tax", "Account Number", "IFSC Code", etc.
+        // Technical: "Barcode", "QR Code", "Serial Number", "Model Number", "Version", "File Number", etc.
+        // Security: "Signature", "Photo", "Fingerprint", "Seal", "Watermark", "Hologram", etc.
+        // Status: "Status", "Validity", "Category", "Type", "Class", "Grade", "Level", etc.
+        // Locations: "Place of Birth", "Place of Issue", "City", "State", "Country", "District", "Pin Code", etc.
+        // Relationships: "Relationship", "Emergency Contact", "Nominee", "Beneficiary", etc.
+        // Medical: "Blood Group", "Medical Condition", "Allergies", "Medications", "Doctor Name", etc.
+        // Vehicle: "Vehicle Number", "Engine Number", "Chassis Number", "Model", "Make", "Year", etc.
+        // Legal: "Case Number", "Court", "Judge", "Lawyer", "Legal Status", etc.
+        // Government: "Office", "Department", "Authority", "Jurisdiction", "Registration Number", etc.
 
-        "document_specific_fields": {{
-            // Dynamic fields based on document type
-            // For license: "vehicle_class", "restrictions"
-            // For passport: "place_of_birth", "passport_type"
-            // For aadhaar: "enrollment_number", "masked_number"
-            // etc.
-        }},
+        // EXTRACT EVERYTHING - Add as many fields as you find information for
 
-        "additional_information": {{
-            "signatures_present": true/false,
-            "photos_present": true/false,
-            "official_seals": ["list", "of", "seals"],
-            "watermarks": ["detected", "watermarks"],
-            "other_features": ["any", "other", "notable", "features"]
-        }}
+    }},
+
+
     }},
 
     "verification_results": {{
-        "authenticity_assessment": {{
-            "is_likely_genuine": true/false,
-            "confidence_score": 0.0-1.0,
-            "risk_level": "low/medium/high",
-            "verification_status": "verified/suspicious/rejected"
-        }},
-
-        "quality_checks": {{
-            "structure_validation": {{
-                "passed": true/false,
-                "score": 0.0-1.0,
-                "details": "explanation_of_structure_assessment"
-            }},
-            "data_consistency": {{
-                "passed": true/false,
-                "score": 0.0-1.0,
-                "details": "explanation_of_consistency_checks"
-            }},
-            "format_compliance": {{
-                "passed": true/false,
-                "score": 0.0-1.0,
-                "details": "explanation_of_format_validation"
-            }},
-            "security_features": {{
-                "passed": true/false,
-                "score": 0.0-1.0,
-                "details": "explanation_of_security_assessment"
-            }}
-        }},
-
-        "flags_and_warnings": [
-            // List any concerns, inconsistencies, or suspicious elements
-        ],
-
-        "recommendations": [
-            // Suggestions for additional verification if needed
-        ]
+        "is_genuine": true/false,
+        "confidence_score": 0.0-1.0,
+        "verification_summary": "brief_assessment_of_document_authenticity"
     }},
 
     "processing_metadata": {{
         "extraction_confidence": 0.0-1.0,
-        "text_quality": "excellent/good/fair/poor",
-        "completeness_score": 0.0-1.0,
-        "processing_notes": "any_additional_observations",
-        "suggested_manual_review": true/false,
-        "timestamp": "processing_timestamp_if_available"
+        "processing_notes": "any_additional_observations_or_unclear_items"
     }}
 }}
 
 **CRITICAL REQUIREMENTS**:
-1. **Accuracy**: Extract information exactly as it appears, preserve original formatting
-2. **Completeness**: Don't miss any visible information, even if it seems minor
-3. **Consistency**: Ensure all dates are in YYYY-MM-DD format, maintain data relationships
-4. **Verification**: Be thorough but fair in authenticity assessment
-5. **Adaptability**: Handle various document types and formats dynamically
-6. **Error Handling**: If information is unclear, note it in processing_notes rather than guessing
+1. **EXTRACT EVERYTHING**: Extract every single piece of text, number, date, name, code, or identifier you can find
+2. **NO LIMITATIONS**: Do not limit yourself to expected fields - create new field names for anything you find
+3. **PRESERVE ORIGINAL**: Extract information exactly as it appears, preserve original formatting and spelling
+4. **INCLUDE UNCLEAR**: If text is unclear or partially visible, include it with a note (e.g., "unclear_text_1": "possible reading")
+5. **MULTIPLE INSTANCES**: If you find multiple instances of similar data, number them (e.g., "Phone 1", "Phone 2", "Address 1", "Address 2")
+6. **COMPREHENSIVE**: Extract headers, footers, watermarks, stamps, annotations, handwritten notes, everything visible
 
-**SPECIAL HANDLING**:
-- For **dates**: Convert to YYYY-MM-DD format, note original format if different
-- For **names**: Extract full names and split into components when possible
-- For **addresses**: Provide both full address and component breakdown
-- For **numbers**: Preserve exact formatting, note any special characters
-- For **unclear text**: Mark as "unclear" rather than making assumptions
-- For **missing fields**: Use null or "not_present" rather than empty strings
+**EXTRACTION INSTRUCTIONS**:
+- **Extract ALL text content**: Every word, phrase, sentence, heading, label, caption, footer, header
+- **Extract ALL numbers**: Document numbers, phone numbers, amounts, percentages, codes, IDs, serial numbers
+- **Extract ALL names**: Person names, company names, place names, product names, brand names
+- **Extract ALL dates**: Any date mentioned in any format (convert to YYYY-MM-DD when possible)
+- **Extract ALL addresses**: Complete addresses, partial addresses, cities, states, countries, postal codes
+- **Extract ALL contact info**: Phone numbers, emails, websites, fax numbers, social media handles
+- **Extract ALL identifiers**: License numbers, passport numbers, account numbers, employee IDs, case numbers
+- **Extract ALL amounts**: Money amounts, quantities, measurements, percentages, scores, ratings
+- **Extract ALL technical data**: File numbers, version numbers, batch codes, barcodes, QR codes
+- **Extract ALL descriptions**: Job titles, qualifications, skills, characteristics, features, conditions
+- **Extract ALL organizational info**: Departments, divisions, offices, institutions, authorities
+- **Extract ALL security features**: Watermarks, seals, signatures, stamps, holograms
+- **Extract ALL additional content**: Notes, comments, annotations, corrections, amendments
 
 **DOCUMENT TYPE SPECIFIC GUIDANCE**:
 - **Identity Documents**: Focus on personal identifiers, validity periods, issuing authority

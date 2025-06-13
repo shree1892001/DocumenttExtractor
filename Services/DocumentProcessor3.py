@@ -258,13 +258,13 @@ class DocumentProcessor:
 
     def _flatten_extracted_data(self, extracted_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Flatten the structured extracted data for legacy compatibility
+        Flatten the extracted data to extract ALL possible fields without limitations
 
         Args:
-            extracted_data: Structured data from unified processor
+            extracted_data: Data from unified processor
 
         Returns:
-            Flattened data dictionary
+            Flattened data dictionary with ALL extracted fields
         """
         flattened = {}
 
@@ -272,99 +272,101 @@ class DocumentProcessor:
         logger.info(f"Flattening extracted data with keys: {list(extracted_data.keys()) if extracted_data else 'None'}")
 
         try:
-            # Personal information
-            personal_info = extracted_data.get("personal_information", {})
-            if personal_info:
-                flattened.update({
-                    "Name": personal_info.get("full_name") or personal_info.get("name"),
-                    "First Name": personal_info.get("first_name"),
-                    "Last Name": personal_info.get("last_name"),
-                    "Date of Birth": personal_info.get("date_of_birth"),
-                    "Gender": personal_info.get("gender"),
-                    "Nationality": personal_info.get("nationality")
-                })
+            # EXTRACT EVERYTHING - No limitations, no specific structure requirements
+            def extract_all_fields(data, prefix=""):
+                """Recursively extract all fields from any data structure"""
+                if isinstance(data, dict):
+                    for key, value in data.items():
+                        # Create field name
+                        if prefix:
+                            field_name = f"{prefix} {key.replace('_', ' ').title()}"
+                        else:
+                            field_name = key.replace('_', ' ').title()
 
-                # Address information
-                address = personal_info.get("address", {})
-                if isinstance(address, dict):
-                    flattened["Address"] = address.get("full_address")
-                    flattened["Street"] = address.get("street")
-                    flattened["City"] = address.get("city")
-                    flattened["State"] = address.get("state")
-                    flattened["Postal Code"] = address.get("postal_code")
-                    flattened["Country"] = address.get("country")
-                elif isinstance(address, str):
-                    flattened["Address"] = address
+                        if isinstance(value, (str, int, float, bool)) and value not in [None, "", "null", "not_present"]:
+                            # Direct value - add to flattened
+                            flattened[field_name] = value
+                        elif isinstance(value, list) and value:
+                            # List - add if not empty
+                            flattened[field_name] = value
+                        elif isinstance(value, dict) and value:
+                            # Nested dict - recurse but also try to add as string if small
+                            if len(str(value)) < 200:  # Small dict, add as string too
+                                flattened[f"{field_name} (Full)"] = str(value)
+                            extract_all_fields(value, field_name)
+                elif isinstance(data, list):
+                    for i, item in enumerate(data):
+                        if isinstance(item, dict):
+                            extract_all_fields(item, f"{prefix} Item {i+1}")
+                        elif item not in [None, "", "null", "not_present"]:
+                            flattened[f"{prefix} Item {i+1}"] = item
 
-            # Document identifiers
-            doc_ids = extracted_data.get("document_identifiers", {})
-            if doc_ids:
-                flattened.update({
-                    "Document Number": doc_ids.get("primary_number"),
-                    "Secondary Numbers": doc_ids.get("secondary_numbers"),
-                    "Barcode Data": doc_ids.get("barcode_data"),
-                    "QR Code Data": doc_ids.get("qr_code_data")
-                })
+            # Extract from all top-level keys
+            for key, value in extracted_data.items():
+                if key in ["document_analysis", "verification_results", "processing_metadata"]:
+                    # Skip metadata sections, focus on actual data
+                    continue
 
-            # Validity information
-            validity = extracted_data.get("validity_information", {})
-            if validity:
-                flattened.update({
-                    "Issue Date": validity.get("issue_date"),
-                    "Expiry Date": validity.get("expiry_date"),
-                    "Valid From": validity.get("valid_from"),
-                    "Valid Until": validity.get("valid_until"),
-                    "Status": validity.get("status")
-                })
+                if isinstance(value, (str, int, float, bool)) and value not in [None, "", "null", "not_present"]:
+                    # Direct top-level value
+                    field_name = key.replace('_', ' ').title()
+                    flattened[field_name] = value
+                elif isinstance(value, dict) and value:
+                    # Nested structure - extract everything
+                    extract_all_fields(value, key.replace('_', ' ').title())
+                elif isinstance(value, list) and value:
+                    # List at top level
+                    field_name = key.replace('_', ' ').title()
+                    flattened[field_name] = value
 
-            # Document-specific fields
-            doc_specific = extracted_data.get("document_specific_fields", {})
-            if doc_specific:
-                flattened.update(doc_specific)
+            # Special handling for common patterns
+            # If we have structured data, also extract it in a flattened way
+            if "personal_information" in extracted_data:
+                personal = extracted_data["personal_information"]
+                extract_all_fields(personal, "")
 
-            # Additional information
-            additional = extracted_data.get("additional_information", {})
-            if additional:
-                flattened.update({
-                    "Signatures Present": additional.get("signatures_present"),
-                    "Photos Present": additional.get("photos_present"),
-                    "Official Seals": additional.get("official_seals"),
-                    "Watermarks": additional.get("watermarks"),
-                    "Other Features": additional.get("other_features")
-                })
+            if "document_identifiers" in extracted_data:
+                doc_ids = extracted_data["document_identifiers"]
+                extract_all_fields(doc_ids, "")
 
-            # If no structured data was found, try to extract from any available data
+            if "validity_information" in extracted_data:
+                validity = extracted_data["validity_information"]
+                extract_all_fields(validity, "")
+
+            # If still no data, try to extract from ANY available data structure
             if not flattened and extracted_data:
-                logger.info("No structured data found, attempting to extract from raw data")
-                # Try to extract from any top-level fields
-                for key, value in extracted_data.items():
-                    if isinstance(value, (str, int, float)) and value:
-                        # Convert key to title case for consistency
-                        formatted_key = key.replace('_', ' ').title()
-                        flattened[formatted_key] = value
-                    elif isinstance(value, dict):
-                        # Flatten nested dictionaries
-                        for nested_key, nested_value in value.items():
-                            if isinstance(nested_value, (str, int, float)) and nested_value:
-                                formatted_key = f"{key.replace('_', ' ').title()} {nested_key.replace('_', ' ').title()}"
-                                flattened[formatted_key] = nested_value
+                logger.info("No data found in standard extraction, trying to extract from ANY available data")
+                extract_all_fields(extracted_data, "")
 
-            # Clean up null/empty values and convert string nulls to actual nulls
+            # Also try to extract from any nested structures we might have missed
+            for key, value in extracted_data.items():
+                if isinstance(value, dict):
+                    for nested_key, nested_value in value.items():
+                        if isinstance(nested_value, dict):
+                            extract_all_fields(nested_value, nested_key.replace('_', ' ').title())
+
+            # Clean up only truly empty values - be very permissive
             cleaned_flattened = {}
             for key, value in flattened.items():
-                # Skip null, empty, or "not_present" values
+                # Only skip truly empty/null values - keep everything else
                 if value is None:
                     continue
                 elif isinstance(value, str):
-                    if value.lower() in ['null', 'not_present', 'n/a', 'none', '']:
+                    # Only skip completely empty strings or explicit nulls
+                    if value.strip() == "" or value.lower() in ['null', 'not_present', 'none']:
                         continue
                     else:
                         cleaned_flattened[key] = value
                 elif isinstance(value, list):
-                    if value:  # Only include non-empty lists
-                        cleaned_flattened[key] = value
-                elif value:  # Include any other truthy values
+                    # Keep all lists, even if they contain some empty items
                     cleaned_flattened[key] = value
+                elif isinstance(value, (int, float, bool)):
+                    # Keep all numbers and booleans
+                    cleaned_flattened[key] = value
+                else:
+                    # Keep everything else that's not None
+                    if value:
+                        cleaned_flattened[key] = value
 
             # Debug logging
             logger.info(f"Flattened data result (before cleaning): {flattened}")
