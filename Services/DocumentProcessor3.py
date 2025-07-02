@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from DocumenttExtractor.Common.constants import *
+from Common.constants import *
 import fitz
 import tempfile
 from typing import List, Dict, Any, Optional, Tuple
@@ -10,12 +10,14 @@ import sys
 import logging
 from dataclasses import dataclass
 import google.generativeai as genai
-from PIL import Image
+from PIL import Image, ImageOps
 import pytesseract
 import traceback
-from DocumenttExtractor.Extractor.ImageExtractor import ImageTextExtractor
-from DocumenttExtractor.Extractor.Paddle import flatten_json
-from DocumenttExtractor.Factories.DocumentFactory import (
+import cv2
+import numpy as np
+from Extractor.ImageExtractor import ImageTextExtractor
+from Extractor.Paddle import flatten_json
+from Factories.DocumentFactory import (
     DocumentExtractorFactory,
     DocumentExtractor,
     TextExtractorFactory,
@@ -45,7 +47,7 @@ class DocumentInfo:
 
 class BaseTextExtractor(ABC):
     def __init__(self, api_key: str):
-        from DocumenttExtractor.Common.gemini_config import GeminiConfig
+        from Common.gemini_config import GeminiConfig
         self.api_key = api_key
         self.config = GeminiConfig.create_vision_processor_config(api_key)
         self.model = self.config.get_model()
@@ -56,7 +58,7 @@ class BaseTextExtractor(ABC):
 
 class TextProcessor:
     def __init__(self, api_key: str):
-        from DocumenttExtractor.Common.gemini_config import GeminiConfig
+        from Common.gemini_config import GeminiConfig
         self.api_key = api_key
         self.config = GeminiConfig.create_document_processor_config(api_key)
         self.model = self.config.get_model()
@@ -193,7 +195,7 @@ class DocumentProcessor:
             self.text_extractor = TextExtractor(api_key)
 
             try:
-                from DocumenttExtractor.Common.gemini_config import initialize_global_config
+                from Common.gemini_config import initialize_global_config
                 self.gemini_config = initialize_global_config(api_key=api_key, model_type="text")
                 logger.info("Gemini configuration initialized successfully")
 
@@ -501,7 +503,7 @@ class DocumentProcessor:
             logger.info("Processing document with unified prompt")
 
             # Prepare the unified prompt with the text
-            from DocumenttExtractor.Common.constants import UNIFIED_DOCUMENT_PROCESSING_PROMPT
+            from Common.constants import UNIFIED_DOCUMENT_PROCESSING_PROMPT
             prompt = UNIFIED_DOCUMENT_PROCESSING_PROMPT.format(text=text)
 
             # Add context for better processing
@@ -1522,10 +1524,12 @@ class DocumentProcessor:
                 if "safety" in error_str.lower() or "finish_reason" in error_str:
                     logger.warning("Regular verification prompt triggered safety filters, trying safer prompt")
                     # Try with safer verification prompt
-                    from DocumenttExtractor.Common.constants import SAFE_DOCUMENT_VERIFICATION_PROMPT
+                    from Common.constants import SAFE_DOCUMENT_VERIFICATION_PROMPT
                     safer_prompt = SAFE_DOCUMENT_VERIFICATION_PROMPT.format(
                         document_data=json.dumps(extracted_data, indent=2),
-                        doc_type=doc_type,
+                        doc_type=
+                        doc_type,
+
                         document_category=extracted_data.get('document_metadata', {}).get('category', 'unknown'),
                         issuing_authority=extracted_data.get('document_metadata', {}).get('issuing_authority', 'unknown')
                     )
@@ -2181,13 +2185,17 @@ class DocumentProcessor:
     def _has_meaningful_content(self, text: str) -> bool:
         """Check if text contains meaningful content"""
         try:
-
+            # Enhanced indicators for legal documents
             indicators = [
-                r'[A-Z]{2,}',
-                r'\d{4,}',
-                r'[A-Za-z]+\s+[A-Za-z]+',
-                r'[A-Za-z]+\s+\d+',
-                r'\d+\s+[A-Za-z]+'
+                r'[A-Z]{2,}',  # Capital letters
+                r'\d{4,}',     # Numbers
+                r'[A-Za-z]+\s+[A-Za-z]+',  # Words
+                r'[A-Za-z]+\s+\d+',        # Words with numbers
+                r'\d+\s+[A-Za-z]+',        # Numbers with words
+                r'[A-Za-z]+[.,;:]\s+[A-Za-z]+',  # Sentences
+                r'[A-Za-z]+[.,;:]\s+\d+',        # Sentences with numbers
+                r'[A-Za-z]+[.,;:]\s+[A-Z]',      # Sentences starting with capital
+                r'[A-Z][a-z]+\s+[A-Z][a-z]+'     # Proper nouns
             ]
 
             indicator_count = 0
@@ -2195,7 +2203,8 @@ class DocumentProcessor:
                 if re.search(pattern, text):
                     indicator_count += 1
 
-            return indicator_count >= 2
+            # More lenient threshold for legal documents
+            return indicator_count >= 1
 
         except Exception as e:
             logger.error(f"Error checking meaningful content: {str(e)}")
@@ -2229,48 +2238,192 @@ class DocumentProcessor:
             return True
 
     def _perform_ocr(self, image_path: str) -> str:
-        """Perform OCR on an image with simplified error handling"""
+        """Perform OCR on an image with improved preprocessing and configuration"""
         try:
-            if not image_path or not os.path.exists(image_path):
-                raise ValueError(f"Invalid image path: {image_path}")
-
-            try:
-                img = Image.open(image_path)
-            except Exception as e:
-                logger.error(f"Error opening image: {str(e)}")
-                raise ValueError(f"Failed to open image: {str(e)}")
-
-            # Always try Tesseract OCR first
-            try:
-                ocr_text = pytesseract.image_to_string(img)
-                
-                # If Tesseract gives good results, use them
-                if self._is_good_ocr_result(ocr_text):
-                    return ocr_text
-                
-                # Otherwise try Gemini, but be prepared to fall back to Tesseract
-                logger.info("Tesseract OCR yielded poor results, trying Gemini Vision")
-                try:
-                    response = self._process_with_gemini(
-                        image_path,
-                        "Extract all text from this document image. Return only the raw text without any formatting."
-                    )
-                    if response and response.strip():
-                        return response.strip()
-                except Exception as e:
-                    logger.warning(f"Gemini Vision failed, using Tesseract results: {str(e)}")
-                    # Return the original Tesseract results if Gemini fails
-                    return ocr_text
-                
-            except Exception as e:
-                logger.error(f"All OCR methods failed: {str(e)}")
-                raise ValueError(f"OCR processing failed: {str(e)}")
-
-            return ocr_text
-
+            logger.info(f"Performing OCR on image: {image_path}")
+            
+            # Read image with OpenCV
+            img = cv2.imread(image_path)
+            if img is None:
+                raise ValueError(f"Failed to read image: {image_path}")
+            
+            # Convert to grayscale
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            
+            # Resize if too small (minimum width 3000px for better quality)
+            height, width = gray.shape
+            if width < 3000:
+                scale = 3000 / width
+                gray = cv2.resize(gray, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+            
+            # Apply noise reduction with optimal parameters
+            gray = cv2.fastNlMeansDenoising(gray, None, 10, 7, 21)
+            
+            # Apply CLAHE for better contrast
+            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+            gray = clahe.apply(gray)
+            
+            # Apply sharpening with optimal kernel
+            kernel = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
+            gray = cv2.filter2D(gray, -1, kernel)
+            
+            # Try different thresholding methods
+            processed_images = []
+            
+            # Otsu's thresholding
+            _, otsu = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            processed_images.append(otsu)
+            
+            # Adaptive thresholding with optimal parameters
+            adaptive = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                                           cv2.THRESH_BINARY, 11, 2)
+            processed_images.append(adaptive)
+            
+            # Inverted adaptive thresholding
+            adaptive_inv = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                                               cv2.THRESH_BINARY_INV, 11, 2)
+            processed_images.append(adaptive_inv)
+            
+            # Save preprocessed images for debugging
+            debug_dir = "ocr_debug"
+            os.makedirs(debug_dir, exist_ok=True)
+            for i, proc_img in enumerate(processed_images):
+                debug_path = os.path.join(debug_dir, f"{os.path.basename(image_path)}_preprocessed_{i}.png")
+                cv2.imwrite(debug_path, proc_img)
+            
+            # Try different Tesseract configurations
+            best_text = ""
+            best_score = 0
+            
+            # PSM modes to try (in order of preference)
+            psm_modes = [
+                6,   # Assume a single uniform block of text
+                3,   # Fully automatic page segmentation, but no OSD
+                4,   # Assume a single column of text of variable sizes
+                11,  # Sparse text. Find as much text as possible in no particular order
+                12   # Sparse text with OSD
+            ]
+            
+            # Languages to try
+            languages = ['eng', 'eng+osd']  # Start with English and OSD
+            
+            for proc_img in processed_images:
+                for psm in psm_modes:
+                    for lang in languages:
+                        config = f'--oem 3 --psm {psm} -l {lang} -c preserve_interword_spaces=1 -c textord_heavy_nr=1 -c textord_min_linesize=2.5 -c textord_force_make_prop_words=1 -c textord_parallel_baselines=1'
+                        try:
+                            # Perform OCR
+                            text = pytesseract.image_to_string(
+                                proc_img,
+                                config=config
+                            )
+                            
+                            # Basic text cleaning
+                            if text:
+                                # Remove non-ASCII characters
+                                text = re.sub(r'[^\x00-\x7F]+', '', text)
+                                
+                                # Remove control characters
+                                text = re.sub(r'[\x00-\x1F\x7F-\x9F]', '', text)
+                                
+                                # Remove excessive whitespace
+                                text = re.sub(r'\s+', ' ', text)
+                                
+                                # Remove empty lines
+                                text = re.sub(r'\n\s*\n', '\n', text)
+                                
+                                # Remove repeated characters (common in garbled OCR)
+                                text = re.sub(r'(.)\1{2,}', r'\1', text)
+                                
+                                # Fix common OCR mistakes
+                                text = text.replace('|', 'I')  # Replace vertical bars with I
+                                text = re.sub(r'[l1]{2,}', 'll', text)  # Fix repeated l/1
+                                text = re.sub(r'[o0]{2,}', 'oo', text)  # Fix repeated o/0
+                                text = re.sub(r'[rn]{2,}', 'nn', text)  # Fix repeated r/n
+                                
+                                # Remove special characters and symbols
+                                text = re.sub(r'[^a-zA-Z0-9\s.,;:!?\'\"()-]', '', text)
+                                
+                                # Fix common OCR substitutions
+                                text = text.replace(';', 'i')  # Fix semicolon to i
+                                text = text.replace(':', 'i')  # Fix colon to i
+                                text = text.replace('~', 'n')  # Fix tilde to n
+                                text = text.replace('=', 'e')  # Fix equals to e
+                                text = text.replace('_', ' ')  # Fix underscore to space
+                                text = text.replace('\\', ' ')  # Fix backslash to space
+                                text = text.replace('/', ' ')  # Fix forward slash to space
+                                
+                                # Final cleanup
+                                text = text.strip()
+                                
+                                # Score the result
+                                score = self._score_ocr_result(text)
+                                
+                                if score > best_score:
+                                    best_score = score
+                                    best_text = text
+                                    logger.info(f"New best result with PSM {psm} and {lang} (score: {score})")
+                                    
+                        except Exception as e:
+                            logger.warning(f"OCR failed for PSM {psm} and {lang}: {str(e)}")
+            
+            if not best_text:
+                raise ValueError("No text could be extracted from the image")
+            
+            logger.info(f"Best OCR result (score: {best_score}):\n{best_text}")
+            return best_text
+            
         except Exception as e:
-            logger.error(f"Error performing OCR: {str(e)}")
-            raise ValueError(f"OCR processing failed: {str(e)}")
+            logger.error(f"Error in OCR processing: {str(e)}")
+            raise RuntimeError(f"OCR processing failed: {str(e)}")
+        finally:
+            # Clean up debug images
+            if os.path.exists(debug_dir):
+                for file in os.listdir(debug_dir):
+                    if file.startswith(os.path.basename(image_path)):
+                        os.remove(os.path.join(debug_dir, file))
+
+    def _score_ocr_result(self, text: str) -> float:
+        """Score the quality of OCR result"""
+        if not text:
+            return 0.0
+        
+        score = 0.0
+        
+        # Length score (prefer longer text)
+        length_score = min(len(text) / 50, 1.0)  # More lenient length requirement
+        score += length_score * 0.3
+        
+        # Word count score
+        words = text.split()
+        word_count = len(words)
+        word_score = min(word_count / 10, 1.0)  # More lenient word count requirement
+        score += word_score * 0.2
+        
+        # Character variety score
+        unique_chars = len(set(text))
+        char_variety = unique_chars / len(text) if text else 0
+        score += char_variety * 0.2
+        
+        # Common word presence score (expanded for legal documents)
+        common_words = {
+            'the', 'and', 'of', 'to', 'in', 'is', 'that', 'for', 'it', 'with',
+            'this', 'be', 'are', 'as', 'at', 'by', 'from', 'has', 'he', 'she',
+            'they', 'we', 'you', 'your', 'their', 'our', 'my', 'his', 'her',
+            'name', 'date', 'address', 'phone', 'email', 'number', 'id', 'card',
+            'passport', 'license', 'document', 'certificate', 'government', 'state',
+            'country', 'city', 'street', 'road', 'avenue', 'lane', 'drive', 'court'
+        }
+        found_common = sum(1 for word in words if word.lower() in common_words)
+        common_score = min(found_common / 3, 1.0)  # More lenient common word requirement
+        score += common_score * 0.2
+        
+        # Punctuation score
+        punct_count = sum(1 for c in text if c in '.,;:!?')
+        punct_score = min(punct_count / 5, 1.0)  # More lenient punctuation requirement
+        score += punct_score * 0.1
+        
+        return min(score, 1.0)  # Ensure final score is between 0 and 1
 
     def _is_good_ocr_result(self, text: str) -> bool:
         """Check if OCR result is of good quality"""
@@ -2281,15 +2434,17 @@ class DocumentProcessor:
             if len(text.strip()) < 10:
                 return False
 
+            # More lenient meaningful content check for legal documents
             if not self._has_meaningful_content(text):
                 return False
 
+            # Reduced error patterns for legal documents
             error_patterns = [
-                r'[|]{2,}',
-                r'[l1]{3,}',
-                r'[o0]{3,}',
-                r'[rn]{3,}',
-                r'\s{3,}'
+                r'[|]{4,}',  # More consecutive vertical bars
+                r'[l1]{5,}',  # More consecutive l/1
+                r'[o0]{5,}',  # More consecutive o/0
+                r'[rn]{5,}',  # More consecutive r/n
+                r'\s{5,}'     # More consecutive spaces
             ]
 
             for pattern in error_patterns:

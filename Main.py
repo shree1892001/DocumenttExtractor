@@ -61,8 +61,7 @@ async def startup_event():
 
     except Exception as e:
         custom_logger.error(f"Failed to initialize services: {str(e)}")
-        # Don't raise the exception to allow the API to start even if some services fail
-        # Set default values
+
         app.state.templates = {}
         app.state.document_processor = None
         custom_logger.warning("API started with limited functionality due to initialization errors")
