@@ -1,15 +1,21 @@
 import sys
 import traceback
+
+import pytesseract
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import warnings
 from Controllers.DocumentProcessorController import router as document_router
 from Controllers.TemplateController import router as template_router
+from Controllers.ComprehensiveDataController import router as comprehensive_router
+from Controllers.UniversalDataController import router as universal_router
 from Services.TemplateService import TemplateService
 from Services.DocumentProcessor3 import DocumentProcessor
-from Common.constants import API_HOST, API_PORT, API_KEY
+from Common.constants import API_HOST, API_PORT, API_KEY, PYTESERRACT_PATH
 from Logging_file.logging_file import custom_logger
+
+pytesseract.pytesseract.tesseract_cmd = PYTESERRACT_PATH
 
 warnings.filterwarnings("ignore")
 
@@ -149,6 +155,22 @@ try:
         tags=["Template Management"]
     )
     custom_logger.info("Template router included successfully")
+
+    custom_logger.info("Including comprehensive data router...")
+    app.include_router(
+        comprehensive_router,
+        prefix="/api/v1",
+        tags=["Comprehensive Data Extraction"]
+    )
+    custom_logger.info("Comprehensive data router included successfully")
+
+    custom_logger.info("Including universal data router...")
+    app.include_router(
+        universal_router,
+        prefix="/api/v1",
+        tags=["Universal Data Extraction"]
+    )
+    custom_logger.info("Universal data router included successfully")
 
 except Exception as e:
     custom_logger.error(f"Failed to include routers: {str(e)}")

@@ -8,7 +8,7 @@ import tempfile
 from typing import Dict, Any, List
 from fastapi import UploadFile
 from Services.DocumentProcessor3 import DocumentProcessor
-from Common.constants import API_KEY
+from Common.constants import API_KEY_1
 from Logging_file.logging_file import custom_logger
 
 
@@ -22,7 +22,7 @@ class DocumentProcessorService:
         Args:
             api_key: API key for external services (defaults to common API_KEY)
         """
-        self.api_key = api_key or API_KEY
+        self.api_key = api_key or API_KEY_1
         self.document_processor = DocumentProcessor(api_key=self.api_key)
         custom_logger.info("DocumentProcessorService initialized")
     

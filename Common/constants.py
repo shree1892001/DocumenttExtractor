@@ -1,3 +1,4 @@
+import pytesseract
 API_KEY = "AIzaSyDcBP8bIBztxmXJh1AL5PxkaaEFfnzSBgc"
 API_KEY_1 = "AIzaSyBmInXvdmt_yiXuRSIkzDd9-wdgZjQIMc0"
 API_KEY_2="AIzaSyACwX0Hg5QX0eDjdH-d38OstgAu5FHj1gk"
@@ -14,6 +15,8 @@ DB_SERVER_NAME="local_shreyas"
 DB_HOST = "127.0.0.1"
 DB_NAME = "test5"
 
+PYTESERRACT_PATH =  "C:\\Program Files\\Tesseract-OCR\\tesseract.exe"
+pytesseract.pytesseract.tesseract_cmd = PYTESERRACT_PATH
 CONFIDENTIAL_KEYWORDS = {
     # Personal identifiers
     'ssn', 'social security number', 'passport number', 'license number',
