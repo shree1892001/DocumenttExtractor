@@ -538,7 +538,7 @@ You are an expert document data extraction specialist with maximum accuracy. You
    - Extract ALL dates, numbers, names, addresses, codes, and identifiers
 
 2. **DETAILED FIELD EXTRACTION WITH ACCURATE NAMES**:
-   
+
    **Personal Information Fields**:
    - "Full Name", "First Name", "Last Name", "Middle Name", "Given Name", "Surname", "Family Name"
    - "Date of Birth", "Birth Date", "DOB", "Born", "Birthday"
@@ -642,7 +642,7 @@ You are an expert document data extraction specialist with maximum accuracy. You
         // EXTRACT EVERYTHING WITH MAXIMUM ACCURACY
         // USE HIGHLY DESCRIPTIVE FIELD NAMES
         // INCLUDE ALL INFORMATION FOUND IN THE DOCUMENT
-        
+
         // Personal Information
         "Full Name": "exact_name_as_appears",
         "First Name": "first_name_only",
@@ -651,7 +651,7 @@ You are an expert document data extraction specialist with maximum accuracy. You
         "Gender": "M/F/Male/Female",
         "Nationality": "country_name",
         "Place of Birth": "birth_location",
-        
+
         // Document Information
         "Document Type": "specific_document_type",
         "Document Number": "exact_number",
@@ -659,22 +659,22 @@ You are an expert document data extraction specialist with maximum accuracy. You
         "Expiry Date": "formatted_date",
         "Issuing Authority": "authority_name",
         "Issuing Country": "country_name",
-        
+
         // Address Information
         "Address": "complete_address",
         "City": "city_name",
         "State": "state_name",
         "Country": "country_name",
         "Postal Code": "postal_code",
-        
+
         // Contact Information
         "Phone Number": "phone_number",
         "Email": "email_address",
-        
+
         // Additional Information
         "Notes": "any_additional_notes",
         "Unclear Text": "text_that_could_not_be_clearly_read",
-        
+
         // EXTRACT EVERYTHING ELSE YOU FIND - CREATE APPROPRIATE FIELD NAMES
     }},
     "verification_results": {{
@@ -735,14 +735,17 @@ Analyze the document with maximum attention to detail and extract all informatio
                 if "extracted_data" in result:
                     extracted_keys = list(result['extracted_data'].keys())
                     logger.info(f"Extracted data keys: {extracted_keys}")
-                    
+
                     # Check if we're getting meaningful field names
-                    generic_text_count = sum(1 for key in extracted_keys if key.startswith('Text_') or key.startswith('text_'))
+                    generic_text_count = sum(
+                        1 for key in extracted_keys if key.startswith('Text_') or key.startswith('text_'))
                     meaningful_count = len(extracted_keys) - generic_text_count
-                    logger.info(f"Meaningful field names: {meaningful_count}, Generic field names: {generic_text_count}")
-                    
+                    logger.info(
+                        f"Meaningful field names: {meaningful_count}, Generic field names: {generic_text_count}")
+
                     if generic_text_count > meaningful_count:
-                        logger.warning("Too many generic field names detected - attempting reprocessing with stricter prompt")
+                        logger.warning(
+                            "Too many generic field names detected - attempting reprocessing with stricter prompt")
                         return self._process_with_strict_prompt(text, source_file, min_confidence)
                 else:
                     logger.warning("No 'extracted_data' key in maximum accuracy result")
@@ -758,7 +761,7 @@ Analyze the document with maximum attention to detail and extract all informatio
                 # Debug logging for legacy result
                 legacy_data = legacy_result.get('extracted_data', {}).get('data', {})
                 logger.info(f"Legacy result extracted data: {legacy_data}")
-                
+
                 if not legacy_data:
                     logger.warning("No extracted data in legacy result - checking original maximum accuracy result")
                     logger.info(f"Original maximum accuracy extracted_data: {result.get('extracted_data', {})}")
@@ -800,13 +803,14 @@ Analyze the document with maximum attention to detail and extract all informatio
             logger.error(f"Error in maximum accuracy processing: {str(e)}")
             raise RuntimeError(f"Maximum accuracy document processing failed: {str(e)}")
 
-    def _process_with_strict_prompt(self, text: str, source_file: str, min_confidence: float) -> Optional[Dict[str, Any]]:
+    def _process_with_strict_prompt(self, text: str, source_file: str, min_confidence: float) -> Optional[
+        Dict[str, Any]]:
         """
         Process document with a comprehensive strict prompt for maximum accuracy
         """
         try:
             logger.info("Processing document with comprehensive strict prompt for maximum accuracy")
-            
+
             strict_prompt = f"""
 You are a document data extraction expert with maximum accuracy requirements. Extract ALL information from this document text and create ONLY highly descriptive, meaningful field names.
 
@@ -946,7 +950,7 @@ Analyze the document with maximum attention to detail and extract all informatio
 """
 
             response = self.text_processor.process_text(text, strict_prompt)
-            
+
             if not response or not response.strip():
                 raise ValueError("AI model returned empty response")
 
@@ -955,14 +959,14 @@ Analyze the document with maximum attention to detail and extract all informatio
                 raise ValueError("Response became empty after cleaning")
 
             result = json.loads(cleaned_response)
-            
+
             # Validate and convert to legacy format
             if not self._validate_unified_response_structure(result):
                 result = self._fix_unified_response_structure(result)
-            
+
             legacy_result = self._convert_unified_to_legacy_format(result, source_file, min_confidence)
             return legacy_result
-            
+
         except Exception as e:
             logger.error(f"Error in strict processing: {str(e)}")
             # Fall back to the original unified prompt
@@ -1586,7 +1590,7 @@ Analyze the document with maximum attention to detail and extract all informatio
                 for segment in document_segments:
                     # Use source as unique identifier since image_path might not exist
                     segment_id = segment.get("source", f"segment_{len(processed_images)}")
-                    
+
                     if segment_id in processed_images:
                         continue
 
@@ -2894,4 +2898,3 @@ Analyze the document with maximum attention to detail and extract all informatio
         except Exception as e:
             logger.error(f"Error converting DOCX to PDF: {str(e)}")
             raise RuntimeError(f"Failed to convert DOCX to PDF: {str(e)}")
-
